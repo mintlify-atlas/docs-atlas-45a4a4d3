@@ -1,0 +1,210 @@
+---
+title: 'Admin: Orders, Customers, Licenses & Settings'
+description: 'Manage customer orders, update statuses, revoke license keys, browse user accounts, configure payment methods, and control seasonal visual effects.'
+---
+
+The Orders, Customers, and Settings sections give you operational control over the transactional side of the shop — from approving individual orders to enabling payment methods and scheduling promotional chat messages.
+
+## Orders
+
+Navigate to `/admin/orders` to see every order placed on the platform, sorted with the most recent first.
+
+### Order list columns
+
+| Column | Description |
+|---|---|
+| **Order ID** | Last 6 characters of the internal ID, displayed in monospace |
+| **Customer** | The buyer's name and email address |
+| **Items** | Product names included in the order |
+| **Total** | Order amount in dollars (stored in cents internally) |
+| **Status** | `PENDING` (yellow) or `COMPLETED` (green) |
+| **Date** | Date the order was placed |
+| **Actions** | Dropdown menu with status and management options |
+
+### Updating order status
+
+Click the three-dot menu (`⋯`) on any order row to open the actions dropdown:
+
+- **Mark Completed** — changes status from `pending` to `completed`. License keys are issued to the customer when an order completes.
+- **Mark Pending** — rolls the status back to `pending` if needed.
+- **Copy Order ID** — copies the full order ID to your clipboard.
+- **Delete Order** — permanently removes the order record. You are asked to confirm. This action cascades and removes associated license keys.
+
+<Warning>
+  Deleting an order removes the customer's license keys for products in that order. Only delete orders when you are certain the associated keys should be invalidated.
+</Warning>
+
+### Order detail fields
+
+Each order record contains:
+
+| Field | Description |
+|---|---|
+| `id` | Unique order identifier |
+| `userId` | The user who placed the order |
+| `stripeSessionId` | Stripe Checkout session reference (unique) |
+| `amount` | Total in cents |
+| `currency` | ISO currency code (e.g. `usd`) |
+| `status` | `pending` or `completed` |
+| `paymentMethod` | `stripe` or `bank_transfer` |
+| `couponCode` | Coupon code applied at checkout, if any |
+| `items` | Line items linking products and their purchase prices |
+
+---
+
+## License keys
+
+License keys are generated per product per order when an order status is set to `completed`. You can view and revoke keys from the customer detail page at `/admin/customers/[id]`.
+
+### License key statuses
+
+| Status | Meaning |
+|---|---|
+| `ACTIVE` | Key is valid and in use |
+| `REVOKED` | Key has been manually invalidated by an admin |
+| `USED` | Key has been consumed (for single-use products) |
+| `EXPIRED` | Key passed its `expiresAt` date |
+
+### Revoking a key
+
+On the customer detail page, locate the license key in the order breakdown and click **Revoke**. The key status changes to `REVOKED` immediately. Revoked keys cannot be reinstated — you would need to create a new order to reissue access.
+
+<Warning>
+  Revoking a license key is irreversible from the admin UI. The customer loses access to the product immediately.
+</Warning>
+
+---
+
+## Customers
+
+Navigate to `/admin/customers` to manage registered users. The page is split into two tabs.
+
+### User management tab
+
+The **User Management** tab lists up to 100 users sorted by order count (most active customers first). For each user you can see their name, email, role, and number of orders.
+
+Click into a customer record at `/admin/customers/[id]` to:
+
+- Edit the customer's name or email using the **Customer Edit Form**
+- View all orders belonging to that customer
+- See license keys issued per order
+- Revoke individual license keys
+
+### Role configuration tab
+
+The **Role Configuration** tab opens the **Role Manager**, where you can:
+
+- View all defined roles (e.g. `CUSTOMER`, `ADMIN`)
+- Create new roles
+- Assign roles to users
+
+To promote a user to admin, find them in the User Management tab, then use the role manager to update their role to `ADMIN`.
+
+<Note>
+  The customers list has a safety cap of 100 records per page load. For large user bases, use direct database access if you need to manage users beyond this limit.
+</Note>
+
+---
+
+## Payment settings
+
+Navigate to `/admin/settings/payments` to control which payment methods are available to shoppers at checkout.
+
+### Supported payment methods
+
+Each payment method is represented by a `PaymentMethod` record in the database. The settings page at `/admin/settings/payments` shows a card for each configured method:
+
+<CardGroup cols={2}>
+  <Card title="Stripe" icon="credit-card">
+    Card payments processed through Stripe Checkout. Enable this to present a Stripe-hosted payment form to customers.
+  </Card>
+  <Card title="Bank Transfer" icon="building-columns">
+    Manual bank transfer option. You can store instructions (account number, IBAN, reference format) in the JSON config field shown to customers at checkout.
+  </Card>
+</CardGroup>
+
+PayPal and Coinbase Commerce are also defined in the schema (`PaymentMethod.name` values: `"stripe"`, `"bank_transfer"`, `"paypal"`, `"coinbase"`) and can be seeded or inserted manually. PayPal credentials are configured via environment variables (see [Environment Variables](/deployment/environment-variables)).
+
+Each method has an **Enable** toggle on its card. Disabled methods do not appear as checkout options. You can have multiple methods enabled simultaneously.
+
+---
+
+## Seasonal settings
+
+Navigate to `/admin/seasonal` to configure the visual and audio atmosphere of the site.
+
+### Visual effects
+
+<AccordionGroup>
+  <Accordion title="Effect mode">
+    Choose how the seasonal particle overlay behaves:
+
+    - **Auto (Date-based)** — the system picks winter or autumn effects based on the current date
+    - **Winter (Snow)** — forces falling snowflake particles regardless of date
+    - **Autumn (Leaves)** — forces falling leaf particles regardless of date
+    - **None** — disables all particle effects
+  </Accordion>
+  <Accordion title="Enable overlay">
+    Master toggle that turns all visual particle effects on or off. When disabled, the effect mode setting is preserved but nothing renders on screen.
+  </Accordion>
+  <Accordion title="Snow density and leaves density">
+    Sliders (1–100%) control the volume of particles rendered. Higher values produce denser snowfall or leaf fall. Adjust to balance visual impact against page performance.
+  </Accordion>
+</AccordionGroup>
+
+### Audio immersion
+
+<AccordionGroup>
+  <Accordion title="Enable music">
+    Plays a thematic background audio track when a visitor first enters the site. The track plays once and stops after the configured duration.
+  </Accordion>
+  <Accordion title="Smart fade out">
+    When enabled, the music fades out gracefully rather than stopping abruptly at the end of the duration.
+  </Accordion>
+  <Accordion title="Duration">
+    Slider from 5 to 300 seconds. Music auto-stops after this time regardless of fade-out setting.
+  </Accordion>
+  <Accordion title="Max volume limit">
+    Caps the audio playback volume (0–100%). Prevents the background music from being too intrusive on systems with high system volume.
+  </Accordion>
+  <Accordion title="Shop ambience">
+    Plays a short impact sound when a visitor navigates into the shop. A separate **Shop Impact Volume** slider (0–100%) controls its level independently from the background music volume.
+  </Accordion>
+</AccordionGroup>
+
+Click **SAVE CONFIGURATION** to persist all seasonal settings. Changes take effect for new visitors immediately.
+
+---
+
+## Sponsored messages
+
+Navigate to `/admin/sponsored` to manage promotional messages that are automatically injected into the live chat stream on a scheduled interval.
+
+### How sponsored messages work
+
+Each `SponsoredMessage` has a **Frequency** field (in minutes). The chat system reads active sponsored messages and injects one into the chat feed at the configured interval. This creates a passive promotional presence without requiring manual intervention.
+
+### Creating a sponsored message
+
+Click **New Sponsored Message** to open the creation dialog. Fill in:
+
+| Field | Required | Description |
+|---|---|---|
+| **Title** | Yes | Short headline for the message |
+| **Description** | Yes | Body text of the promotional message |
+| **Image URL** | No | Optional image displayed with the message |
+| **Link URL** | No | Optional URL users can follow from the message |
+| **Frequency** | Yes | How often (in minutes) the message appears in chat. Default: 15 |
+| **Active Status** | — | Toggle to control whether the message is currently injected |
+
+### Managing existing messages
+
+The sponsored message list shows all messages with their title, frequency, and active status. From the list you can:
+
+- **Edit** any message by clicking its edit button — opens the same form pre-populated
+- **Toggle active status** — inactive messages are skipped during injection
+- **Delete** a message — removes it permanently from the rotation
+
+<Tip>
+  Set a high frequency value (e.g. 60 minutes) for evergreen messages and a lower value (e.g. 5 minutes) for time-sensitive promotions you want customers to see quickly.
+</Tip>

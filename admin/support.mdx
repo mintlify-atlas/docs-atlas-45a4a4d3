@@ -1,0 +1,129 @@
+---
+title: 'Support Tickets & Live Chat Administration'
+description: 'Respond to customer support tickets, configure ticket categories, moderate the live chat, and schedule sponsored messages that appear in the chat stream.'
+---
+
+The Support Hub at `/admin/support` is where you manage every inbound request from customers and guests. It combines a structured ticket system with a live chat widget, both of which you can configure without touching code.
+
+## Support tickets
+
+### Viewing the ticket list
+
+The Support Hub page lists all tickets sorted by most recently updated. Each ticket card shows:
+
+- **Category** — the topic area the customer selected when opening the ticket
+- **Status badge** — colour-coded: `OPEN` (green), `IN_PROGRESS`, or `CLOSED` (grey)
+- **Ticket ID** — last 8 characters of the internal ID
+- **Timestamps** — when the ticket was last updated
+- **Guest indicator** — shown when the ticket was submitted without a logged-in account
+- **Last message preview** — a truncated snippet of the most recent message
+
+Click the message icon on a ticket card to open the full conversation at `/admin/support/[ticketId]`.
+
+### Ticket statuses
+
+Tickets move through a defined lifecycle:
+
+<Steps>
+  <Step title="OPEN">
+    A new ticket submitted by a customer or guest. Requires your attention.
+  </Step>
+  <Step title="IN_PROGRESS">
+    You have started responding. The customer can see their ticket is being handled.
+  </Step>
+  <Step title="CLOSED">
+    The issue has been resolved. No further replies are expected.
+  </Step>
+</Steps>
+
+### Responding to a ticket
+
+Open a ticket by clicking its message icon. The ticket detail page at `/admin/support/[ticketId]` uses the **AdminTicketChat** component, which shows the full message thread in chronological order. Type your reply in the input at the bottom and submit to add an admin message.
+
+Each message records the sender's name, their role, and an optional avatar. Admin replies are labelled with the admin role so customers can distinguish your responses from their own messages.
+
+<Tip>
+  Update the ticket status to `IN_PROGRESS` as soon as you open a ticket so the customer knows their request is being handled. Set it to `CLOSED` once the issue is fully resolved.
+</Tip>
+
+### Guest tickets
+
+Tickets can be submitted without a user account. These are tracked by a `guestId` instead of a `userId`. Guest tickets appear with a "Guest" badge in the ticket list. You can still reply to them — the reply is stored in the ticket message thread and the guest can view it if they return to the same session.
+
+---
+
+## Support categories
+
+The categories displayed on the customer-facing support page are fully configurable from the **Support Categories** panel at the top of `/admin/support`.
+
+### Adding a category
+
+Click **Add Category** to open the creation dialog. Fill in:
+
+| Field | Required | Description |
+|---|---|---|
+| **Title** | Yes | The label shown on the support category button (e.g. "Payments") |
+| **Subtitle** | No | A short description displayed under the title |
+| **Icon** | Yes | Choose from the allowed icon set |
+
+Available icons:
+
+| Icon value | Represents |
+|---|---|
+| `credit-card` | Payment topics |
+| `gamepad` | Game-related issues |
+| `headphones` | General support |
+| `dollar-sign` | Billing topics |
+| `shield-check` | Account security |
+| `message-square` | General inquiries |
+
+New categories are appended to the end of the list. The `order` value increments automatically.
+
+### Deleting a category
+
+Hover a category row and click the trash icon. Confirm the deletion. Existing tickets that reference a deleted category retain their category string, but new tickets cannot select a category that no longer exists.
+
+<Warning>
+  There is no built-in reorder drag-and-drop persistence in the current version. New categories always append to the end. Plan your category list order before creating categories, or update the `order` field directly if needed.
+</Warning>
+
+---
+
+## Live chat settings
+
+Navigate to `/admin/chat` to control the appearance and behaviour of the live chat widget shown to visitors.
+
+The **Chat Settings Form** lets you configure:
+
+- Visual appearance options for the chat widget
+- Behaviour rules such as message limits and auto-responses
+
+The **Announcement Form** lets you post a pinned announcement message that appears at the top of the chat for all users. Use this for time-sensitive notices (e.g. maintenance windows, sale announcements).
+
+### Chat message model
+
+Every message in the chat — whether from a customer, guest, or admin — is stored as a `ChatMessage` record:
+
+| Field | Description |
+|---|---|
+| `text` | The message content |
+| `senderName` | Display name of the sender |
+| `senderRole` | Role label shown next to the name |
+| `senderAvatar` | Optional avatar URL |
+| `reactions` | JSON summary of aggregate reaction counts |
+| `ticketId` | Links the message to a support ticket, if applicable |
+| `senderId` | User ID for logged-in senders; null for guests |
+
+### Reactions
+
+Chat messages support three reaction types: **likes**, **dislikes**, and **hearts**. Each reaction is stored as a separate `ChatReaction` record with a unique constraint on `(messageId, userId, type)` — meaning each user can apply each reaction type to a given message only once. This prevents reaction spam and ballot-stuffing.
+
+The aggregate counts in the `reactions` JSON field on `ChatMessage` reflect the current totals across all users.
+
+---
+
+## Sponsored messages in chat
+
+Sponsored messages are created and managed at `/admin/sponsored` (covered fully in [Orders, Customers & Settings](/admin/orders-customers)), but their effect is visible in the live chat. Active sponsored messages are automatically injected into the chat feed at the interval you configure (in minutes). They appear as system messages with a title, description, optional image, and optional link.
+
+To prevent them from appearing, either set a very long frequency or toggle the message to inactive.

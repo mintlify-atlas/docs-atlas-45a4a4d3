@@ -1,0 +1,93 @@
+{
+  "projectType": "saas",
+  "projectName": "Levi.dev Portfolio",
+  "projectDescription": "A full-stack personal portfolio and digital product storefront built with Next.js, featuring a cyberpunk aesthetic, integrated e-commerce with Stripe/PayPal, license key management, user authentication, and a comprehensive admin dashboard.",
+  "theme": "willow",
+  "primaryColor": "#ef4444",
+  "lightColor": null,
+  "darkColor": "#0a0a0a",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Portfolio",
+            "pages": [
+              "portfolio/sections",
+              "portfolio/animations",
+              "portfolio/customization"
+            ]
+          },
+          {
+            "group": "Shop & Payments",
+            "pages": [
+              "shop/overview",
+              "shop/products-categories",
+              "shop/payments",
+              "shop/license-keys",
+              "shop/coupons"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "auth/overview",
+              "auth/user-roles"
+            ]
+          },
+          {
+            "group": "Admin Dashboard",
+            "pages": [
+              "admin/overview",
+              "admin/managing-products",
+              "admin/orders-customers",
+              "admin/support"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/environment-variables",
+              "deployment/database",
+              "deployment/deploying"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Animated portfolio sections: Hero with matrix rain, About, Skills carousel, Projects grid, Contact form",
+    "3D visual effects using Three.js and React Three Fiber",
+    "Framer Motion animations with cyberpunk/matrix aesthetic",
+    "Integrated digital product shop with Stripe and PayPal checkout",
+    "License key generation and management for digital products",
+    "Coupon/discount system with percentage and fixed-amount options",
+    "User authentication with NextAuth.js (credentials + OAuth providers)",
+    "Role-based access control (CUSTOMER / ADMIN roles)",
+    "Full-featured admin dashboard with revenue charts, order management, and customer tracking",
+    "Support ticket system with live chat and admin responses",
+    "Seasonal effects and site settings configurable from admin panel",
+    "Email notifications via Resend",
+    "MySQL database with Prisma ORM"
+  ],
+  "publicApiSurface": [
+    "POST /api/contact — Send a contact form message via email",
+    "POST /api/checkout — Create a Stripe checkout session",
+    "GET /api/shop/products — List available products",
+    "POST /api/payment — Handle PayPal payment flow",
+    "GET /api/download — Serve licensed digital product files",
+    "POST /api/webhooks/stripe — Stripe webhook handler for order fulfillment",
+    "GET/POST /api/auth/[...nextauth] — NextAuth.js authentication endpoints",
+    "POST /api/uploads — Admin file upload endpoint"
+  ]
+}

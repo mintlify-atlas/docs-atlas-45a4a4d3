@@ -1,0 +1,78 @@
+---
+title: 'Admin Dashboard: stats, revenue chart, and sections'
+description: 'A guided tour of the Levi.dev admin dashboard — stats cards, revenue chart with time ranges, system status indicator, and links to every management section.'
+---
+
+The admin dashboard at `/admin` is your central command center for the Levi.dev digital product shop. It requires the `ADMIN` role — any account without that role is redirected away automatically. Once you're in, you get a real-time snapshot of store performance and quick access to every management section from a single screen.
+
+<Note>
+  Only accounts with the `ADMIN` role can access `/admin` and any of its sub-routes. To promote a user to admin, run `node prisma/promote-admin.js` (see [User Roles](/auth/user-roles)).
+</Note>
+
+## Stats cards
+
+Four summary cards appear across the top of the dashboard, each pulled fresh on every page load.
+
+| Card | What it shows |
+|---|---|
+| **Total Revenue** | Sum of all completed order amounts, converted from cents to dollars |
+| **Orders** | Count of orders with `completed` status |
+| **Customers** | Count of users with the `CUSTOMER` role |
+| **Products** | Total number of products in the catalogue |
+
+The **Products** card is a clickable link that takes you directly to `/admin/products`.
+
+## Revenue chart
+
+Below the stats cards, the revenue chart visualises historical sales from completed orders. You can switch between four time ranges:
+
+- **Daily** — last 30 days, grouped by date
+- **Weekly** — last 12 weeks, grouped by ISO week
+- **Monthly** — last 12 months, grouped by month and year
+- **Yearly** — all-time, grouped by year
+
+All monetary values in the chart are displayed in US dollars. The raw database values are stored in cents and divided by 100 before rendering.
+
+## System status
+
+A **System Status** indicator lives in the top-right corner of the dashboard header. It gives you an at-a-glance signal that the underlying services are running correctly without leaving the page.
+
+## Admin sections
+
+Every management area of the shop is reachable from the sidebar navigation. The table below maps each section to its route and purpose.
+
+<CardGroup cols={2}>
+  <Card title="Products" icon="shopping-bag" href="/admin/managing-products">
+    Create, edit, delete, and list/unlist digital products. Upload product files and manage inventory.
+  </Card>
+  <Card title="Categories" icon="layout-grid" href="/admin/managing-products">
+    Organise products into categories with custom order, images, and slugs.
+  </Card>
+  <Card title="Orders" icon="package" href="/admin/orders-customers">
+    View all customer orders, inspect line items, and update order status between pending and completed.
+  </Card>
+  <Card title="Customers" icon="users" href="/admin/orders-customers">
+    Browse registered users, manage roles, and edit customer profiles.
+  </Card>
+  <Card title="Coupons" icon="tag" href="/admin/managing-products">
+    Create percentage-based discount codes with optional usage caps and expiry dates.
+  </Card>
+  <Card title="Support" icon="headphones" href="/admin/support">
+    Manage support ticket categories and respond to open tickets from customers and guests.
+  </Card>
+  <Card title="Chat" icon="message-square" href="/admin/support">
+    Configure the live chat widget appearance, behaviour, and post pinned announcements.
+  </Card>
+  <Card title="Carousel" icon="image" href="/admin/managing-products">
+    Edit the hero carousel slides shown on the shop homepage.
+  </Card>
+  <Card title="Settings → Payments" icon="credit-card" href="/admin/orders-customers">
+    Enable or disable Stripe and bank transfer as accepted payment methods.
+  </Card>
+  <Card title="Seasonal" icon="snowflake" href="/admin/support">
+    Toggle visual particle effects (snow, leaves) and configure background audio immersion.
+  </Card>
+  <Card title="Sponsored" icon="megaphone" href="/admin/support">
+    Schedule promotional messages that are automatically injected into the live chat stream.
+  </Card>
+</CardGroup>

@@ -1,0 +1,147 @@
+---
+title: 'Products & Categories: Fields, Pricing, and File Delivery'
+description: 'Reference for the Product and Category Prisma models — field definitions, sale pricing, license duration, stock tracking, and downloadable file storage paths.'
+---
+
+Products are the core entity of the shop. Each product record holds everything needed to display the listing, process a purchase, and deliver the digital file — from the marketing copy and feature list to the file path used by the download endpoint. Categories provide the taxonomy layer that powers the category grid on the shop homepage.
+
+## Product model
+
+```prisma prisma/schema.prisma
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  description String      @db.Text
+  price       Int
+  salePrice   Int?        // Price in cents
+  isSale      Boolean     @default(false)
+  image       String
+
+  category    String
+  features    String      @db.Text // JSON string
+  stock       Int         @default(0)
+  isListed    Boolean     @default(true)
+  duration    Int?        // Duration in days (null = lifetime)
+  filePath    String?     // Path to the uploaded file (if any)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  orderItems  OrderItem[]
+  licenseKeys LicenseKey[]
+}
+```
+
+### Field reference
+
+<AccordionGroup>
+  <Accordion title="name, description, image">
+    `name` is the product title displayed in the listing card and product detail page. `description` is rendered as a block quote on the product detail page. `image` is a URL (typically a CDN or `/public` path) used for the product thumbnail and detail hero image; if absent, the first letter of the product name is shown as a placeholder.
+  </Accordion>
+  <Accordion title="price and salePrice (cents)">
+    Both `price` and `salePrice` are stored as **integers in cents** — a $29.99 product has `price: 2999`. The UI divides by 100 to display dollar amounts: `(product.price / 100).toFixed(2)`. `salePrice` is the discounted price shown when `isSale` is `true`; it is optional and has no effect unless `isSale` is also set.
+  </Accordion>
+  <Accordion title="isSale and salePrice">
+    When `isSale` is `true`, the product detail page and product cards should show `salePrice` as the active price and render `price` as struck-through. The checkout uses the price at the time of cart addition (stored on the `OrderItem`), so the sale flag is enforced at the UI layer.
+  </Accordion>
+  <Accordion title="features (JSON string)">
+    `features` is a `TEXT` column containing a **JSON-serialised array of strings**, for example:
+
+    ```json
+    ["VS Code Settings", "ESLint & Prettier Configs", "Git Hooks", "Readme Templates"]
+    ```
+
+    The product page parses this with `JSON.parse(dbProduct.features)` before rendering the feature checklist. When creating or editing a product through the admin, this field must be serialised before writing to the database.
+  </Accordion>
+  <Accordion title="stock">
+    `stock` is an integer tracking available units. The Stripe webhook decrements stock by 1 for each product in a completed order using `{ stock: { decrement: 1 } }`. Reaching zero does not automatically delist the product — enforcement is left to admin action.
+  </Accordion>
+  <Accordion title="isListed">
+    When `isListed` is `false`, the product is excluded from the shop listing query (`WHERE isListed = true`). Admins can toggle this flag per product from `/admin/products` without deleting the record. The product detail page at `/shop/[id]` fetches by ID directly and does not check `isListed`, so a direct link to a delisted product still resolves.
+  </Accordion>
+  <Accordion title="duration (license expiry in days)">
+    `duration` controls how long the generated license key is valid after purchase.
+
+    | `duration` value | Behaviour |
+    |---|---|
+    | `null` | Lifetime license — `expiresAt` on the `LicenseKey` is set to `null` |
+    | `30` | 30-day license — `expiresAt = purchaseDate + 30 days` |
+    | `365` | 1-year license — `expiresAt = purchaseDate + 365 days` |
+
+    The expiry is calculated inside the Stripe webhook handler:
+
+    ```typescript app/api/webhooks/stripe/route.ts
+    const expiresAt = product?.duration
+      ? new Date(Date.now() + product.duration * 24 * 60 * 60 * 1000)
+      : null
+    ```
+  </Accordion>
+  <Accordion title="filePath (downloadable file)">
+    `filePath` stores the server-side path to the product file relative to `storage/products/`. The naming convention written by the upload handler is `{timestamp}-{random}-{originalFilename}`. The download endpoint at `GET /api/download/[licenseId]` reconstructs the original filename by splitting on `-` and discarding the first two segments.
+
+    When `filePath` is `null`, no download button appears in the order history — the product is treated as a non-file delivery (for example, a service or access credential delivered via email).
+  </Accordion>
+</AccordionGroup>
+
+### How the shop listing query works
+
+```typescript app/shop/page.tsx
+const products = await db.product.findMany({
+  where: { isListed: true },
+  orderBy: { createdAt: 'desc' }
+})
+```
+
+Products are returned newest-first. Client-side filtering then applies category, search query, and sort preferences without additional database round trips.
+
+The `ShopContent` component parses `features` from its JSON string representation on the client side before passing products to `ProductCard`:
+
+```typescript components/shop/shop-content.tsx
+const parsedProducts = products.map(p => ({
+  ...p,
+  features: (typeof p.features === 'string'
+    ? JSON.parse(p.features)
+    : p.features) as string[]
+}))
+```
+
+## Category model
+
+```prisma prisma/schema.prisma
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?  @db.Text
+  image       String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+```
+
+### Field reference
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | `String` | Unique display name shown in the category grid and filter toolbar |
+| `slug` | `String` | Unique URL-safe identifier — used for the `/shop/category/[slug]` route |
+| `description` | `String?` | Optional text shown on the category landing page |
+| `image` | `String?` | Optional banner image URL displayed as a background on the category page |
+| `order` | `Int` | Controls display sequence in the category grid; lower values appear first |
+
+Categories are fetched with `orderBy: { order: 'asc' }` so you control the display sequence by setting the `order` field in the admin.
+
+<Note>
+  The `Product.category` field is a plain string that matches `Category.name` by convention. There is no foreign-key relationship between the two models in the current schema — the comment in `schema.prisma` notes this will be linked in a future migration.
+</Note>
+
+## Admin product management
+
+The admin panel at `/admin/products` lists all products regardless of `isListed` status and provides three actions per row:
+
+- **Toggle listing** — flips `isListed` without deleting the record
+- **Edit** — navigates to `/admin/products/[id]` for full field editing
+- **Delete** — permanently removes the product (cascades to `OrderItem` and `LicenseKey` via the relation)
+
+<Warning>
+  Deleting a product cascades to its `LicenseKey` records. Customers who purchased the product will lose their license entries. Delist the product with `isListed: false` instead of deleting it if orders already exist.
+</Warning>

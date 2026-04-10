@@ -1,0 +1,210 @@
+---
+title: 'Environment Variables Configuration Guide'
+description: 'Configure all required and optional environment variables for database, authentication, payments, and email before running the portfolio app.'
+---
+
+Before starting the development server or deploying the app, you must configure environment variables for the database, authentication, payment processors, and email delivery. The `prebuild` script (`scripts/check-env.js`) runs automatically before every build and will exit with an error if any required variable is missing.
+
+Create a `.env.local` file in the root of the project. This file is excluded from version control via `.gitignore`, so it is safe to store secrets there during local development. In production, set these values directly in your hosting provider's environment settings (e.g. Vercel project settings).
+
+<Warning>
+Never commit `.env.local` or any file containing real secrets to version control. The `.gitignore` already excludes all `.env*` files, but double-check before pushing.
+</Warning>
+
+## Required variables
+
+The following variables are enforced by `scripts/check-env.js` at build time. A missing value causes the build to fail immediately.
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | Yes | MySQL connection string |
+| `AUTH_SECRET` | Yes | NextAuth.js session signing secret |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Yes | Stripe publishable key (client-side) |
+| `STRIPE_SECRET_KEY` | Yes | Stripe secret key (server-side) |
+| `NEXT_PUBLIC_PAYPAL_CLIENT_ID` | Yes | PayPal client ID (client-side) |
+| `NEXT_PUBLIC_PAYPAL_CLIENT_SECRET` | Yes | PayPal client secret (client-side) |
+| `NEXT_PUBLIC_APP_URL` | Warning | Public app URL — missing causes a redirect warning |
+
+## Variable groups
+
+### Database
+
+The app uses Prisma with a MySQL database. The `DATABASE_URL` must be a valid MySQL connection string.
+
+<ParamField path="DATABASE_URL" type="string" required>
+  Full MySQL connection string. Prisma uses this at runtime and during migrations.
+
+  Format: `mysql://USER:PASSWORD@HOST:PORT/DATABASE`
+
+  Example: `mysql://admin:s3cr3t@db.example.com:3306/portfolio`
+</ParamField>
+
+<Tip>
+For managed MySQL hosting, [PlanetScale](https://planetscale.com) and [Railway](https://railway.app) both offer free tiers and provide a ready-to-copy connection string from their dashboards.
+</Tip>
+
+---
+
+### Authentication
+
+The app uses [NextAuth.js v5](https://authjs.dev) with GitHub and Google OAuth providers (`auth.config.ts`).
+
+<ParamField path="AUTH_SECRET" type="string" required>
+  Random string used to sign and encrypt session tokens. Generate one with:
+
+  ```bash
+  openssl rand -base64 32
+  ```
+
+  Example value: `K3wX9pL2mQvRtYhBzNcUjDfAeGsOiW7=`
+</ParamField>
+
+<ParamField path="NEXTAUTH_URL" type="string">
+  Canonical URL of your deployment. Required in some NextAuth.js v5 configurations, especially behind proxies or on custom domains.
+
+  Example: `https://yourdomain.com`
+</ParamField>
+
+<ParamField path="AUTH_GITHUB_ID" type="string">
+  GitHub OAuth App client ID.
+</ParamField>
+
+<ParamField path="AUTH_GITHUB_SECRET" type="string">
+  GitHub OAuth App client secret.
+</ParamField>
+
+<ParamField path="AUTH_GOOGLE_ID" type="string">
+  Google OAuth client ID.
+</ParamField>
+
+<ParamField path="AUTH_GOOGLE_SECRET" type="string">
+  Google OAuth client secret.
+</ParamField>
+
+<Tip>
+Create a GitHub OAuth App at **GitHub → Settings → Developer settings → OAuth Apps**. Set the callback URL to `https://yourdomain.com/api/auth/callback/github`.
+
+Create a Google OAuth client at **Google Cloud Console → APIs & Services → Credentials**. Set the redirect URI to `https://yourdomain.com/api/auth/callback/google`.
+</Tip>
+
+<Warning>
+`AUTH_GITHUB_SECRET` and `AUTH_GOOGLE_SECRET` are server-side secrets. Never expose them to the client — do not prefix them with `NEXT_PUBLIC_`.
+</Warning>
+
+---
+
+### Stripe
+
+Stripe handles checkout sessions and webhook events. Three variables are needed: the publishable key (safe for the browser), the secret key (server-only), and the webhook signing secret (server-only).
+
+<ParamField path="NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" type="string" required>
+  Publishable key, used in the browser to initialize the Stripe.js SDK.
+
+  Example: `pk_live_51AbcDefGhi...` or `pk_test_51AbcDefGhi...` for test mode.
+</ParamField>
+
+<ParamField path="STRIPE_SECRET_KEY" type="string" required>
+  Secret API key used server-side for creating checkout sessions and interacting with the Stripe API.
+
+  Example: `sk_live_51AbcDefGhi...` or `sk_test_51AbcDefGhi...`
+</ParamField>
+
+<ParamField path="STRIPE_WEBHOOK_SECRET" type="string">
+  Signing secret for verifying Stripe webhook payloads sent to `/api/webhooks/stripe`.
+
+  Example: `whsec_AbcDefGhi...`
+</ParamField>
+
+<Warning>
+`STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` must never be exposed to the browser. Keep them as server-side-only variables (no `NEXT_PUBLIC_` prefix).
+</Warning>
+
+<Tip>
+Find your Stripe keys at [dashboard.stripe.com/apikeys](https://dashboard.stripe.com/apikeys). Use test mode keys (`pk_test_` / `sk_test_`) during development and live keys in production. The webhook secret is generated when you register a webhook endpoint in the Stripe dashboard under **Developers → Webhooks**.
+</Tip>
+
+---
+
+### PayPal
+
+PayPal is used as an alternative checkout method. The `check-env.js` script requires both variables to be prefixed with `NEXT_PUBLIC_`, making them available client-side.
+
+<ParamField path="NEXT_PUBLIC_PAYPAL_CLIENT_ID" type="string" required>
+  PayPal application client ID. Used client-side to initialize the PayPal JS SDK.
+
+  Example: `AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz`
+</ParamField>
+
+<ParamField path="NEXT_PUBLIC_PAYPAL_CLIENT_SECRET" type="string" required>
+  PayPal application client secret. Used server-side for API calls despite the `NEXT_PUBLIC_` prefix in the env check.
+
+  Example: `EaBbCcDdEeFfGgHhIiJj...`
+</ParamField>
+
+<ParamField path="NEXT_PUBLIC_APP_URL" type="string">
+  The public base URL of the deployed app. Used for PayPal redirect URLs and other absolute URL construction. Missing this variable triggers a warning (not a hard failure) during the pre-build check.
+
+  Example: `https://yourdomain.com`
+</ParamField>
+
+<Tip>
+Create a PayPal app at [developer.paypal.com/developer/applications](https://developer.paypal.com/developer/applications). Use the **Sandbox** credentials for development and the **Live** credentials for production.
+</Tip>
+
+---
+
+### Email (Resend)
+
+The contact form (`/api/contact`) uses [Resend](https://resend.com) to send and confirm messages. The API key is hardcoded in the current source — replace it with an environment variable for production security.
+
+<ParamField path="RESEND_API_KEY" type="string">
+  Resend API key for sending transactional email. Currently the app uses a hardcoded key in `app/api/contact/route.ts` — this should be moved to an environment variable before deploying.
+
+  Example: `re_AbcDefGhi123...`
+</ParamField>
+
+<Tip>
+Generate a Resend API key at [resend.com/api-keys](https://resend.com/api-keys). You also need to verify a sending domain in the Resend dashboard to use a custom `from` address.
+</Tip>
+
+---
+
+## .env.local template
+
+Copy this template into `.env.local` and fill in your values. Lines starting with `#` are comments and are ignored.
+
+```bash .env.local
+# ── Database ─────────────────────────────────────────────────────────────────
+DATABASE_URL="mysql://USER:PASSWORD@HOST:3306/DATABASE"
+
+# ── Authentication ────────────────────────────────────────────────────────────
+AUTH_SECRET="replace-with-output-of-openssl-rand-base64-32"
+NEXTAUTH_URL="http://localhost:3000"
+
+# GitHub OAuth
+AUTH_GITHUB_ID="your-github-oauth-app-client-id"
+AUTH_GITHUB_SECRET="your-github-oauth-app-client-secret"
+
+# Google OAuth
+AUTH_GOOGLE_ID="your-google-oauth-client-id"
+AUTH_GOOGLE_SECRET="your-google-oauth-client-secret"
+
+# ── Stripe ────────────────────────────────────────────────────────────────────
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_..."
+STRIPE_SECRET_KEY="sk_test_..."
+STRIPE_WEBHOOK_SECRET="whsec_..."
+
+# ── PayPal ────────────────────────────────────────────────────────────────────
+NEXT_PUBLIC_PAYPAL_CLIENT_ID="your-paypal-client-id"
+NEXT_PUBLIC_PAYPAL_CLIENT_SECRET="your-paypal-client-secret"
+
+# ── App URL ───────────────────────────────────────────────────────────────────
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+
+# ── Email (Resend) ────────────────────────────────────────────────────────────
+RESEND_API_KEY="re_..."
+```
+
+<Note>
+In local development the pre-build check reads `.env.local` directly, so you do not need to export variables into the shell before running `npm run dev`. For CI/CD pipelines and Vercel, set variables in the platform's environment settings instead.
+</Note>

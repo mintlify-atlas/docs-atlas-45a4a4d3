@@ -1,0 +1,184 @@
+---
+title: 'Coupons: Discount Codes, Usage Limits, and Admin Management'
+description: 'How coupon codes work in the shop — percentage and fixed-amount discounts, usage tracking, expiry, maxUses enforcement, and the validation flow at checkout.'
+---
+
+Coupons let you offer percentage-based or fixed-amount discounts at checkout. Customers enter a code in the cart before proceeding to payment; the code is validated server-side before the payment session is created. Usage is tracked automatically each time a successful payment completes.
+
+## Coupon model
+
+```prisma prisma/schema.prisma
+model Coupon {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  percent   Int?     // Percentage discount (1-100)
+  amount    Int?     // Fixed amount discount (in cents)
+  isActive  Boolean  @default(true)
+  uses      Int      @default(0)
+  maxUses   Int?     // Optional limit, null = unlimited
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+```
+
+### Field reference
+
+| Field | Type | Notes |
+|---|---|---|
+| `code` | `String` (unique) | The string customers enter at checkout — stored and compared in uppercase |
+| `percent` | `Int?` | Percentage discount from 1 to 100; mutually exclusive with `amount` |
+| `amount` | `Int?` | Fixed discount in cents (e.g. `500` = $5.00 off); mutually exclusive with `percent` |
+| `isActive` | `Boolean` | Master on/off switch; inactive coupons are rejected regardless of other fields |
+| `uses` | `Int` | Running count of successful redemptions; incremented automatically by webhooks |
+| `maxUses` | `Int?` | Maximum allowed redemptions; `null` means unlimited |
+| `expiresAt` | `DateTime?` | UTC timestamp after which the coupon is rejected; `null` means no expiry |
+
+## Discount types
+
+<Tabs>
+  <Tab title="Percentage discount">
+    Set `percent` to an integer between 1 and 100. Leave `amount` as `null`.
+
+    **Example:** `percent: 20` gives 20% off the cart total.
+
+    The cart UI calculates the discount amount for display:
+
+    ```typescript components/shop/cart-popover.tsx
+    if (appliedCoupon && appliedCoupon.percent) {
+      discountAmount = (totalAmount * appliedCoupon.percent) / 100
+    }
+    const finalTotal = Math.max(0, totalAmount - discountAmount)
+    ```
+
+    The checkout route applies the same calculation when building the Stripe session total:
+
+    ```typescript app/api/checkout/route.ts
+    if (coupon.type === "PERCENTAGE") {
+      totalAmount = Math.round(totalAmount * (1 - coupon.value / 100))
+    }
+    ```
+  </Tab>
+  <Tab title="Fixed amount discount">
+    Set `amount` to the number of cents to deduct. Leave `percent` as `null`.
+
+    **Example:** `amount: 1000` gives $10.00 off the cart total.
+
+    The checkout route applies the deduction with a floor of zero:
+
+    ```typescript app/api/checkout/route.ts
+    } else {
+      totalAmount = Math.max(0, totalAmount - coupon.value)
+    }
+    ```
+
+    <Note>
+      Fixed-amount coupon display in the cart popover is noted as a TODO in the current codebase (`cart-popover.tsx`). The discount is correctly applied server-side during checkout but may not be reflected in the client-side preview total for fixed-amount coupons.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Coupon validation
+
+When a customer enters a code in the cart and clicks "Apply", the `validateCoupon` server action runs:
+
+```typescript app/shop/actions.ts
+export async function validateCoupon(code: string) {
+  const coupon = await db.coupon.findUnique({ where: { code } })
+
+  if (!coupon) return { error: "Invalid coupon code" }
+
+  if (!coupon.isActive)
+    return { error: "This coupon is no longer active" }
+
+  if (coupon.expiresAt && coupon.expiresAt < new Date())
+    return { error: "This coupon has expired" }
+
+  if (coupon.maxUses && coupon.uses >= coupon.maxUses)
+    return { error: "This coupon has reached its usage limit" }
+
+  return {
+    success: true,
+    coupon: { code: coupon.code, percent: coupon.percent, amount: coupon.amount }
+  }
+}
+```
+
+Validation checks run in this order:
+
+1. **Existence** — the code must exist in the database
+2. **Active flag** — `isActive` must be `true`
+3. **Expiry** — `expiresAt` must be in the future (or null)
+4. **Usage limit** — `uses` must be less than `maxUses` (or `maxUses` must be null)
+
+Passing all checks returns the coupon's discount values to the client for preview. The coupon ID is then passed along in the checkout request body.
+
+## Coupon states
+
+| State | Condition | Customer sees |
+|---|---|---|
+| Valid | `isActive = true`, not expired, under usage limit | Discount applied |
+| Inactive | `isActive = false` | "This coupon is no longer active" |
+| Expired | `expiresAt < now()` | "This coupon has expired" |
+| Exhausted | `uses >= maxUses` | "This coupon has reached its usage limit" |
+| Not found | Code not in database | "Invalid coupon code" |
+
+## Usage tracking
+
+The `uses` counter is incremented **after a successful payment** inside the webhook (Stripe) or capture route (PayPal). It is never incremented during validation alone — entering a code in the cart does not consume a use.
+
+**Stripe webhook:**
+```typescript app/api/webhooks/stripe/route.ts
+const couponId = session.metadata?.couponId
+if (couponId) {
+  await db.coupon.update({
+    where: { id: couponId },
+    data: { uses: { increment: 1 } }
+  })
+}
+```
+
+**PayPal capture route:**
+```typescript app/api/payment/route.ts
+if (couponId) {
+  await db.coupon.update({
+    where: { id: couponId },
+    data: { uses: { increment: 1 } }
+  })
+}
+```
+
+Both increment operations use Prisma's atomic `{ increment: 1 }` to avoid race conditions when multiple purchases complete simultaneously.
+
+## Creating coupons in the admin
+
+Coupons are managed from `/admin/coupons` using the `CouponManager` component and the server actions in `app/admin/coupons/actions.ts`.
+
+The `createCoupon` action validates the form input with Zod before writing to the database:
+
+```typescript app/admin/coupons/actions.ts
+const CouponSchema = z.object({
+  code: z.string().min(3).toUpperCase(),
+  percent: z.number().min(1).max(100),
+  maxUses: z.number().optional().nullable(),
+  expiresAt: z.string().optional().nullable(),
+})
+```
+
+<Note>
+  The admin coupon creation form currently only exposes the `percent` field. Creating fixed-amount (`amount`) coupons requires direct database insertion or a schema extension to the admin form.
+</Note>
+
+Available admin actions:
+
+| Action | Function | Effect |
+|---|---|---|
+| Create | `createCoupon(prevState, formData)` | Inserts new coupon record |
+| Delete | `deleteCoupon(id)` | Permanently removes coupon |
+| Toggle | `toggleCoupon(id, isActive)` | Flips `isActive` without deleting |
+
+All three actions call `revalidatePath("/admin/coupons")` to refresh the server-rendered coupon list after each mutation.
+
+<Tip>
+  Set `maxUses: 1` for single-use promotional codes. Set `expiresAt` to a specific date for time-limited campaigns. Combine both for a flash promotion that expires after the first 50 redemptions or on a set date — whichever comes first.
+</Tip>

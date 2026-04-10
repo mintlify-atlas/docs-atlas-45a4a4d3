@@ -1,0 +1,64 @@
+---
+title: "Introduction to Levi.dev Portfolio & Shop"
+description: "A cyberpunk-themed Next.js application that combines a personal developer portfolio with a fully featured digital product storefront and admin dashboard."
+---
+
+Levi.dev is a full-stack Next.js application that serves two purposes in one codebase: a personal developer portfolio with a cyberpunk aesthetic, and a complete digital product shop with real payment processing, license key delivery, user authentication, and a comprehensive admin dashboard. Whether you are the developer setting it up for your own use or exploring it as a reference implementation, this documentation covers everything from local setup to production deployment.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Cyberpunk portfolio" icon="user" href="/portfolio/sections">
+    A single-page portfolio with Hero, About, Skills, Projects, and Contact sections. Animated with Three.js 3D backgrounds, a matrix rain effect, and Framer Motion transitions.
+  </Card>
+  <Card title="Digital product shop" icon="bag-shopping" href="/shop/overview">
+    Sell digital products organized by category with stock tracking, sale pricing, and file delivery. Customers browse at `/shop` and check out with Stripe or PayPal.
+  </Card>
+  <Card title="License key management" icon="key" href="/shop/license-keys">
+    License keys are automatically generated and assigned to the buyer after a successful payment. Keys support active, revoked, expired, and used statuses with optional expiry dates.
+  </Card>
+  <Card title="Dual payment providers" icon="credit-card" href="/shop/payments">
+    Stripe Checkout handles card payments via webhooks. PayPal is available as a second option. Both providers are configurable from the admin dashboard.
+  </Card>
+  <Card title="User authentication" icon="lock" href="/auth/overview">
+    NextAuth.js v5 provides email/password sign-in and OAuth via GitHub and Google. Sessions are JWT-based. Users are assigned either a `CUSTOMER` or `ADMIN` role.
+  </Card>
+  <Card title="Admin dashboard" icon="chart-line" href="/admin/overview">
+    A protected `/admin` area for managing products, categories, orders, customers, coupons, support tickets, carousel items, seasonal effects, and site settings.
+  </Card>
+  <Card title="Support & live chat" icon="headset" href="/admin/support">
+    A built-in live chat widget lets visitors open support tickets. Admins respond from the dashboard. Chat history, reactions, and sponsored messages are all stored in the database.
+  </Card>
+  <Card title="Coupon & discount codes" icon="tag" href="/shop/coupons">
+    Create percentage or fixed-amount discount codes with optional usage limits and expiry dates. Customers apply codes at checkout.
+  </Card>
+</CardGroup>
+
+## Tech stack
+
+The application is built on a modern, production-ready stack:
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16 (App Router) |
+| UI | React 19, Tailwind CSS, Radix UI, shadcn/ui |
+| Language | TypeScript 5 |
+| 3D & animation | Three.js, `@react-three/fiber`, Framer Motion |
+| Database | MySQL via Prisma ORM |
+| Authentication | NextAuth.js v5 with GitHub and Google OAuth |
+| Payments | Stripe, PayPal |
+| Email | Resend |
+| State management | Zustand |
+| Forms | React Hook Form + Zod |
+
+## Who this is for
+
+This project is aimed at developers who want to self-host a combined portfolio and digital storefront without stitching together separate services. It works well as:
+
+- A personal portfolio that also generates income from digital products (templates, scripts, assets, etc.)
+- A reference implementation of Next.js App Router with payments, auth, and a database
+- A starting point to fork and adapt for a client project
+
+<Note>
+  The repository is private (`"private": true` in `package.json`). You will need access to the source to clone and run it locally.
+</Note>

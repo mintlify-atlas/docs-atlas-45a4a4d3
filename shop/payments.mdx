@@ -1,0 +1,207 @@
+---
+title: 'Payment Processing: Stripe, PayPal, and Webhooks'
+description: 'How Stripe and PayPal handle checkout — session creation, webhook fulfillment, order and license key creation, and the PaymentMethod database model.'
+---
+
+The shop supports multiple payment providers managed through the `PaymentMethod` database model. Admins enable or disable providers from the database, and the cart UI dynamically shows only the enabled options. Currently Stripe and PayPal are the two primary provider integrations, each with its own checkout flow and fulfillment path.
+
+## PaymentMethod model
+
+Payment providers are not hard-coded — they are database records that can be toggled without a deployment.
+
+```prisma prisma/schema.prisma
+model PaymentMethod {
+  id          String   @id @default(cuid())
+  name        String   @unique // "stripe", "bank_transfer", "paypal", "coinbase"
+  displayName String
+  isEnabled   Boolean  @default(false)
+  config      String?  @db.Text // JSON string for provider config
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+```
+
+| Field | Notes |
+|---|---|
+| `name` | Machine identifier used in code (`"stripe"`, `"paypal"`, `"bank_transfer"`, `"coinbase"`) |
+| `displayName` | Human-readable label shown in the cart payment method selector |
+| `isEnabled` | Only methods where this is `true` are returned by `getEnabledPaymentMethods()` |
+| `config` | JSON blob for provider-specific public configuration (e.g. bank transfer instructions, crypto wallet addresses) |
+
+The server action that populates the cart's payment selector:
+
+```typescript app/shop/actions.ts
+export async function getEnabledPaymentMethods() {
+  return db.paymentMethod.findMany({
+    where: { isEnabled: true },
+    orderBy: { name: 'asc' },
+  })
+}
+```
+
+## Stripe
+
+<Steps>
+  <Step title="Initiate checkout">
+    The cart calls `POST /api/checkout` with the product IDs, the selected payment method ID, and an optional coupon code. The server looks up the products, applies any coupon discount, and creates a Stripe Checkout Session using the Stripe SDK.
+  </Step>
+  <Step title="Redirect to Stripe">
+    The API returns a `{ url: string }` response pointing to the Stripe-hosted checkout page. The browser navigates to this URL where the customer enters card details.
+  </Step>
+  <Step title="Stripe sends webhook">
+    On successful payment, Stripe sends a `POST` request to `/api/webhooks/stripe`. The handler verifies the signature using `STRIPE_WEBHOOK_SECRET` and processes `checkout.session.completed` events.
+  </Step>
+  <Step title="Order fulfillment">
+    Inside the webhook handler, the application:
+    1. Finds or creates the `User` record by email from the Stripe session
+    2. Increments the coupon `uses` counter if a coupon was applied
+    3. Creates the `Order` record linked to the user and Stripe session ID
+    4. Creates one `OrderItem` per purchased product
+    5. Generates a `LicenseKey` per product with status `ACTIVE` (and `expiresAt` if the product has a `duration`)
+    6. Decrements `stock` by 1 per product
+  </Step>
+</Steps>
+
+### Stripe webhook handler
+
+The webhook endpoint listens only for `checkout.session.completed` with `payment_status === "paid"`:
+
+```typescript app/api/webhooks/stripe/route.ts
+if (event.type === "checkout.session.completed") {
+  const session = event.data.object as Stripe.Checkout.Session
+
+  if (session.payment_status === "paid") {
+    const productIds = session.metadata?.productIds
+      ? JSON.parse(session.metadata.productIds)
+      : []
+
+    // ... create Order, OrderItems, LicenseKeys
+    const expiresAt = product?.duration
+      ? new Date(Date.now() + product.duration * 24 * 60 * 60 * 1000)
+      : null
+
+    await db.licenseKey.create({
+      data: {
+        key: generateLicenseKey(),
+        productId,
+        userId: user.id,
+        orderId: order.id,
+        status: "ACTIVE",
+        expiresAt,
+      }
+    })
+  }
+}
+```
+
+### Stripe environment variables
+
+```bash
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
+```
+
+<Note>
+  Use the unprefixed variable names `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` for all server-side Stripe credentials. Never prefix these with `NEXT_PUBLIC_` — doing so exposes secrets to the browser bundle.
+</Note>
+
+## PayPal
+
+<Steps>
+  <Step title="Create PayPal order">
+    When the customer selects PayPal and clicks checkout, the cart creates a PayPal order on the client side using the PayPal JS SDK. Product IDs and the coupon ID are serialised into the order's `custom_id` field as a compact JSON payload.
+  </Step>
+  <Step title="Customer approves payment">
+    The PayPal button renders the standard PayPal approval flow (popup or redirect). The customer logs in to PayPal and approves the charge.
+  </Step>
+  <Step title="Capture the payment">
+    After approval, the client calls `POST /api/payment` with the `orderID` from PayPal, plus `name`, `email`, and `amount`. The server calls `capturePayPalOrder(orderID)` and validates that the captured amount matches the expected total.
+  </Step>
+  <Step title="Order fulfillment">
+    If the capture status is `COMPLETED`, the server:
+    1. Finds or creates the `User` by email (from PayPal capture data or request body)
+    2. Parses product IDs from the `custom_id` metadata embedded in the PayPal order
+    3. Creates the `Order` (with `stripeSessionId` set to `PAYPAL_{orderID}` for uniqueness), `OrderItem`, and `LicenseKey` records
+    4. Increments the coupon `uses` counter if a coupon was applied
+  </Step>
+</Steps>
+
+### PayPal capture route
+
+```typescript app/api/payment/route.ts
+const captureData = await capturePayPalOrder(data.orderID)
+
+if (captureData.status !== "COMPLETED") {
+  return NextResponse.json(
+    { error: `Payment capture failed with status ${captureData.status}` },
+    { status: 400 }
+  )
+}
+```
+
+The captured amount is validated against the client-supplied total before any order records are written:
+
+```typescript app/api/payment/route.ts
+if (normalizedClientAmount !== Number.parseFloat(captureAmount).toFixed(2)
+    || captureCurrency !== "USD") {
+  return NextResponse.json(
+    { error: "Captured amount does not match order total" },
+    { status: 400 }
+  )
+}
+```
+
+### PayPal environment variables
+
+```bash
+NEXT_PUBLIC_PAYPAL_CLIENT_ID=AY...
+NEXT_PUBLIC_PAYPAL_CLIENT_SECRET=EL...
+```
+
+<Note>
+  The pre-build check (`scripts/check-env.js`) requires `NEXT_PUBLIC_PAYPAL_CLIENT_ID` and `NEXT_PUBLIC_PAYPAL_CLIENT_SECRET`. The server-side `lib/paypal.ts` also accepts the non-prefixed `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` as alternatives, falling back to the `NEXT_PUBLIC_` variants when the non-prefixed ones are absent.
+</Note>
+
+## Comparing the two flows
+
+<Tabs>
+  <Tab title="Stripe">
+    | Step | Handler |
+    |---|---|
+    | Checkout initiation | `POST /api/checkout` |
+    | Payment page | Stripe-hosted Checkout |
+    | Fulfillment trigger | Stripe webhook `checkout.session.completed` |
+    | Webhook endpoint | `POST /api/webhooks/stripe` |
+    | Signature verification | `stripe.webhooks.constructEvent()` with `STRIPE_WEBHOOK_SECRET` |
+    | Order `stripeSessionId` | Stripe Checkout Session ID (`cs_...`) |
+
+    The Stripe flow is entirely server-driven after the redirect. The webhook is the single source of truth for order creation — the success page at `/shop/success` is cosmetic only.
+  </Tab>
+  <Tab title="PayPal">
+    | Step | Handler |
+    |---|---|
+    | Order creation | PayPal JS SDK (client-side) |
+    | Approval | PayPal hosted approval UI |
+    | Fulfillment trigger | `POST /api/payment` (client calls after approval) |
+    | Capture endpoint | `POST /api/payment` |
+    | Amount validation | Server compares captured amount to client-supplied total |
+    | Order `stripeSessionId` | `PAYPAL_{orderID}` (prefixed PayPal order ID) |
+
+    The PayPal flow relies on a client-initiated capture request. There is no separate webhook — the `POST /api/payment` route both captures and fulfils in one call.
+  </Tab>
+</Tabs>
+
+## Registering a Stripe webhook
+
+When deploying, register the webhook endpoint with Stripe so that `checkout.session.completed` events are forwarded:
+
+```bash
+stripe listen --forward-to https://yourdomain.com/api/webhooks/stripe
+```
+
+In production, configure the webhook in the Stripe Dashboard under **Developers → Webhooks**, adding the endpoint URL `https://yourdomain.com/api/webhooks/stripe` and selecting the `checkout.session.completed` event.
+
+<Warning>
+  Never expose `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET` in client-side code or environment variables prefixed with `NEXT_PUBLIC_`. Stripe can detect leaked keys and will alert you, but the damage may already be done.
+</Warning>

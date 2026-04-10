@@ -1,0 +1,439 @@
+---
+title: "Portfolio animations: matrix rain, Motion, and CSS effects"
+description: "How the portfolio visual effects work — matrix rain canvas, Framer Motion scroll reveals, CSS keyframe animations, and the terminal typewriter system."
+---
+
+The portfolio's visual identity is built from several independent animation systems that run in parallel: a canvas-based matrix rain, Framer Motion transitions, CSS keyframe animations, and a typewriter terminal effect. Each system is designed to degrade gracefully on mobile — particle counts are reduced, matrix density is lowered, and some canvas effects are disabled entirely below certain breakpoints.
+
+## Matrix rain
+
+`components/matrix-rain.tsx` renders falling Japanese katakana and alphanumeric characters onto an HTML5 `<canvas>` element positioned absolutely behind the hero section.
+
+### Character set
+
+```typescript
+const MATRIX_CHARS =
+  "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+```
+
+### Props
+
+```typescript
+interface MatrixRainProps {
+  color?:         string   // Hex color for characters. Default: "#ff0000"
+  glowIntensity?: number   // Shadow blur multiplier. Default: 0.8
+  density?:       number   // Column density multiplier. Default: 1.0
+  speed?:         number   // Base fall speed multiplier. Default: 2.0
+  opacity?:       number   // Canvas opacity. Default: 0.8
+  interactive?:   boolean  // Enable mouse/touch repulsion. Default: true
+  enabled?:       boolean  // Mount or skip the canvas entirely. Default: true
+}
+```
+
+### How it's used in the hero
+
+```typescript
+<MatrixRain
+  color="#ff0000"
+  glowIntensity={0.3}
+  density={isMobile ? 0.2 : 0.3}
+  speed={0.8}
+  opacity={0.4}
+  interactive={false}
+  enabled={true}
+/>
+```
+
+The component is imported with `dynamic()` and `ssr: false` to prevent server rendering:
+
+```typescript
+const MatrixRain = dynamic(() => import("./matrix-rain"), { ssr: false })
+```
+
+### Drop mechanics
+
+Each column in the canvas is a "drop" object:
+
+```typescript
+{
+  x: number        // Horizontal center of the column
+  y: number        // Current vertical position of the head character
+  speed: number    // Per-frame fall distance
+  length: number   // Number of trailing characters (8–14)
+  chars: string[]  // Current character at each position
+  lastUpdate: number // Timestamp of last character scramble
+  highlighted: boolean // Whether this drop has full-brightness head
+}
+```
+
+Every 50ms, each character in a drop has a 20% chance of being replaced with a random character from `MATRIX_CHARS`, creating the scrambling effect.
+
+The head character of a highlighted drop is rendered at full `rgb(r, g, b)` with a `shadowBlur` of 20. Trailing characters fade from opacity `1.0` to `0.1` based on position in the drop.
+
+### Interactive mode
+
+When `interactive={true}`, drops within 200px of the cursor become `highlighted = true`, creating a brighter cluster near the mouse. Mouse position is throttled to 50ms via `useThrottle`.
+
+### Visibility optimization
+
+The component uses `useInView` from Framer Motion to detect visibility. When the hero is scrolled out of view, the `draw` loop still runs but skips all canvas operations, keeping the `requestAnimationFrame` chain alive without doing GPU work:
+
+```typescript
+const draw = (timestamp: number) => {
+  if (!isInView) {
+    animationRef.current = requestAnimationFrame(draw)
+    return
+  }
+  // ... drawing code
+}
+```
+
+### Canvas blend mode
+
+The canvas uses `mixBlendMode: "screen"`, which lightens colors rather than covering them. Against the dark background this makes the red characters glow without obscuring the content beneath.
+
+---
+
+## Framer Motion animations
+
+All five portfolio sections use Framer Motion for entrance animations. The pattern is consistent across the codebase.
+
+### Scroll-based reveals with `useInView`
+
+```typescript
+const ref = useRef<HTMLDivElement>(null)
+const isInView = useInView(ref, { once: true, margin: "-100px" })
+```
+
+The `margin: "-100px"` offset means the animation triggers 100px before the element reaches the viewport edge, so it appears in progress as you scroll rather than snapping in. `once: true` ensures each element only animates once.
+
+The `ref` is attached to the section heading container, and `isInView` drives the `animate` prop:
+
+```typescript
+<motion.div
+  ref={ref}
+  initial={{ opacity: 0, y: 20 }}
+  animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+  transition={{ duration: 0.8 }}
+>
+```
+
+### Hero entrance stagger
+
+The hero headline uses staggered delays to sequence each word into view:
+
+```typescript
+// "Full-Stack" — delay 0.2s
+<motion.span
+  initial={{ opacity: 0, y: 20 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ duration: 0.8, delay: 0.2 }}
+>
+  Full-Stack
+</motion.span>
+
+// "System Administrator" — delay 0.4s
+<motion.span
+  initial={{ opacity: 0, y: 20 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ duration: 0.8, delay: 0.4 }}
+>
+  System Administrator
+</motion.span>
+```
+
+### Horizontal slide-in (About section)
+
+The About section uses opposing horizontal slides to create a balanced entrance:
+
+```typescript
+// Profile photo — slides in from the left
+initial={{ opacity: 0, x: -50 }}
+animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: -50 }}
+transition={{ duration: 0.8, delay: 0.2 }}
+
+// Text content — slides in from the right
+initial={{ opacity: 0, x: 50 }}
+animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: 50 }}
+transition={{ duration: 0.8, delay: 0.4 }}
+```
+
+### Staggered project cards
+
+Each project card uses a per-index delay for a cascading reveal:
+
+```typescript
+<motion.div
+  initial={{ opacity: 0, y: 30 }}
+  animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+  transition={{ duration: 0.6, delay: 0.2 * index }}
+>
+```
+
+### Contact form state transitions
+
+The submit button uses `AnimatePresence` with `mode="wait"` to transition between the three button states. Each state is wrapped in a `motion.div` with a unique `key` so Framer Motion treats them as distinct elements:
+
+```typescript
+<AnimatePresence mode="wait">
+  {loading ? (
+    <motion.div
+      key="loading"
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 10 }}
+    >
+      <LoadingSpinner /> Sending...
+    </motion.div>
+  ) : status?.type === 'success' ? (
+    <motion.div key="success" ...>
+      <AnimatedCheckmark /> Message Sent!
+    </motion.div>
+  ) : (
+    <motion.div key="ready" ...>
+      <AnimatedDataStreamMailIcon /> Send Message
+    </motion.div>
+  )}
+</AnimatePresence>
+```
+
+### Animated SVG icons
+
+Several icons in the hero and contact sections are animated SVG paths drawn with Framer Motion's `pathLength` property. The eye icon in the "Showcase" button, for example, draws its outline over 1 second then animates the pupil radius in a loop:
+
+```typescript
+<motion.circle
+  cx="12"
+  cy="12"
+  initial={{ r: 0 }}
+  animate={{ r: [0, 4, 2.5, 4, 2.5, 4, 0] }}
+  transition={{
+    duration: 4,
+    ease: "easeInOut",
+    repeat: Infinity,
+    repeatDelay: 1,
+  }}
+/>
+```
+
+The animated mail icon (used in the contact button and form submit) draws three horizontal lines with staggered `pathLength` and `opacity` animations to simulate data streaming into the envelope:
+
+```typescript
+<motion.path
+  d="M1 12 H 11"
+  initial={{ pathLength: 0, pathOffset: 1, opacity: 0 }}
+  animate={{ pathLength: 1, pathOffset: 0, opacity: [0, 1, 0] }}
+  transition={{ duration: 1.5, repeat: Infinity, delay: 0 }}
+/>
+```
+
+---
+
+## Terminal effect typewriter
+
+`components/terminal-effect.tsx` is a fully featured terminal emulator rendered in the hero's right column.
+
+### Default demo sequence
+
+On mount the terminal waits 2 seconds, then types through `DEFAULT_COMMANDS` at 50ms per character:
+
+```typescript
+const DEFAULT_COMMANDS = [
+  "Welcome to Levi's Portfolio",
+  "",
+  "npm install portfolio",
+  "Initializing developer profile...",
+  "Loading skills and experience...",
+  "Importing creative solutions...",
+  "export default function Developer() {",
+  "  return (",
+  "    <FullStackDeveloper",
+  "      frontend={['React', 'Next.js', 'TypeScript', 'Tailwind CSS', 'Three.js']}",
+  "      backend={['Node.js', 'Express.js', 'MongoDB', 'GraphQL', 'MySQL/Prisma']}",
+  '      passion="Building modern web experiences"',
+  "    />",
+  "  )",
+  "}",
+  "Looking to collaborate? Contact me below.",
+]
+```
+
+After the sequence completes, it waits 3 seconds and loops from the start.
+
+### Interactive mode
+
+Clicking the interactive mode toggle switches the terminal to an interactive shell. Available commands:
+
+| Command | Response |
+|---------|----------|
+| `help` | Lists available commands |
+| `clear` | Clears the terminal output |
+| `about` | Short bio |
+| `skills` | Tech stack summary |
+| `contact` | Email and social links |
+| `matrix` | Toggles the matrix canvas overlay inside the terminal |
+| `particles` | Toggles the particle system inside the terminal |
+| `xrp` | Fetches live XRP/USD price from CoinGecko and displays an SVG chart |
+| `dox` | Fetches the visitor's IP info from `ipinfo.io` and types it out |
+
+### Syntax highlighting
+
+The `formatText` function applies color coding using regex patterns. Each line is split and scanned against patterns in priority order:
+
+```typescript
+const patterns = [
+  { regex: /(import|export|default|function|return|const|let|var)\b/g, color: '#ef4444' },  // Keywords — red
+  { regex: /(['"].*?['"])/g,                                           color: '#fbbf24' },  // Strings — amber
+  { regex: /(\{|\}|\[|\]|\(|\))/g,                                     color: '#a78bfa' },  // Brackets — purple
+  { regex: /(React|Next\.js|TypeScript|...)/g,                         color: '#f87171' },  // Tech names — red
+  { regex: /(\d+)/g,                                                   color: '#ec4899' },  // Numbers — pink
+  { regex: /(true|false|null|undefined)/g,                              color: '#8b5cf6' },  // Booleans — violet
+]
+```
+
+Overlapping matches are filtered by keeping only the first match at each character position.
+
+### CRT effects inside the terminal
+
+The terminal renders three canvas overlays:
+
+- **`circuitCanvasRef`** — A grid of random horizontal and vertical line segments drawn at `rgba(239, 68, 68, 0.1)` opacity, updated every 100ms. A vertical "data flow" line sweeps left to right driven by `circuitPattern` state.
+- **`canvasRef`** — The matrix rain effect (same character set as `MatrixRain`), toggled by the `matrix` command.
+- **`particleCanvasRef`** — Two particle types: `data` (radial-gradient dots) and `energy` (short line segments), both rising from the bottom. Toggled by the `particles` command.
+
+A moving scanline `div` sweeps from top to bottom at position `${scanlinePosition}%`, updated every 30ms, with a red glow blur and a yellow box-shadow.
+
+---
+
+## CSS animations
+
+The following keyframe animations are defined in `app/globals.css` and extended in `tailwind.config.ts`.
+
+### Carousel scroll (`animate-scroll`)
+
+```css
+@keyframes scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-scroll        { animation: scroll 20s linear infinite; }
+.animate-scroll-mobile { animation: scroll 20s linear infinite; }
+```
+
+Used in `components/skills.tsx` to continuously scroll the duplicated tech stack cards.
+
+### Gradient animation (`animate-gradient-x`)
+
+Defined in `tailwind.config.ts`:
+
+```typescript
+keyframes: {
+  "gradient-x": {
+    "0%, 100%": {
+      "background-size": "200% 200%",
+      "background-position": "left center",
+    },
+    "50%": {
+      "background-size": "200% 200%",
+      "background-position": "right center",
+    },
+  },
+},
+animation: {
+  "gradient-x": "gradient-x 15s ease infinite",
+},
+```
+
+Used on the "Administrator" word in the hero headline and the contact form background, shifting a gradient background left-to-right on a 15-second loop.
+
+### Circuit flow (`.circuit-animation`)
+
+```css
+.circuit-animation {
+  background: linear-gradient(90deg, transparent, rgba(255, 0, 0, 0.2), transparent);
+  animation: circuitFlow 8s linear infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes circuitFlow {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+```
+
+Sweeps a red translucent gradient horizontally across the hero background, overlaid at `opacity-20` with `z-index: 30`.
+
+### Scan line (`.scan-line`)
+
+```css
+.scan-line {
+  background: linear-gradient(to bottom, transparent, rgba(255, 0, 0, 0.1), transparent);
+  background-size: 100% 10px;
+  animation: scanLine 3s linear infinite;
+  mix-blend-mode: overlay;
+}
+
+@keyframes scanLine {
+  0%   { background-position: 0 -100%; }
+  100% { background-position: 0 200%; }
+}
+```
+
+Creates a repeating horizontal band that scrolls down the hero section at `z-index: 50`, simulating a CRT monitor scan.
+
+### Float variants
+
+The `tailwind.config.ts` defines two float animations:
+
+```typescript
+"float": {
+  "0%, 100%": { transform: "translateY(0px)" },
+  "50%":      { transform: "translateY(-10px)" },
+},
+"pulse-slow": {
+  "0%, 100%": { opacity: "1" },
+  "50%":      { opacity: "0.5" },
+},
+```
+
+### Shimmer (`.animate-shimmer`)
+
+```typescript
+shimmer: {
+  "0%":   { transform: "translateX(-100%)" },
+  "100%": { transform: "translateX(100%)" },
+},
+animation: {
+  shimmer: "shimmer 2s linear infinite",
+},
+```
+
+Used in the hero section's bottom merge zone to create two sweeping light bands (one red-tinted, one blue-tinted) at `opacity-20`.
+
+---
+
+## Floating particles
+
+The `AnimatedParticles` component in `hero.tsx` renders two sets of Framer Motion `motion.div` elements:
+
+**Rising dots** (20 on desktop, 8 on mobile):
+
+```typescript
+<motion.div
+  className="absolute w-1 h-1 bg-red-500/20 rounded-full"
+  initial={{ x: `${Math.random() * 100}%`, y: '100%', opacity: 0 }}
+  animate={{ y: ['100%', '0%'], opacity: [0, 0.3, 0] }}
+  transition={{
+    duration: 2 + Math.random() * 2,
+    repeat: Infinity,
+    delay: Math.random() * 2,
+    ease: 'easeInOut',
+  }}
+  style={{ filter: 'blur(1px)' }}
+/>
+```
+
+**Floating blobs** (5 on desktop, 2 on mobile), larger `w-2 h-2` dots that also scale from 0 to 1 and back, appearing in the bottom 192px of the hero section.
+
+Both sets are client-only (`mounted` gate) and positioned `absolute` within a `pointer-events-none` container to avoid interfering with clicks.

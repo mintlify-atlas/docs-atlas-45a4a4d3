@@ -1,0 +1,121 @@
+---
+title: "Architecture of the Levi.dev portfolio application"
+description: "How the public portfolio, shop, authentication, admin dashboard, API routes, and data layer fit together in a single Next.js App Router codebase."
+---
+
+The application is a monolithic Next.js App Router project where every concern — portfolio, storefront, auth, payments, and administration — lives in the same codebase and shares the same database. This keeps deployment simple: one repository, one Vercel project, one MySQL database. The sections below describe how each layer is structured and how they connect.
+
+## App areas
+
+<CardGroup cols={2}>
+  <Card title="Public portfolio (/)" icon="house" href="/portfolio/sections">
+    The root route renders the single-page portfolio: Hero, About, Skills, Projects, and Contact sections. Three.js powers a 3D animated background; a matrix rain debug overlay is available in development. Visitor geolocation (via ipinfo.io) personalizes the Hero greeting.
+  </Card>
+  <Card title="Shop (/shop)" icon="bag-shopping" href="/shop/overview">
+    The storefront lists digital products by category. Individual product pages are dynamically generated from the database. Checkout redirects to Stripe Checkout or renders a PayPal button depending on the selected payment method.
+  </Card>
+  <Card title="Auth (/auth)" icon="lock" href="/auth/overview">
+    Sign-in and error pages live under `/auth`. NextAuth.js v5 handles session management, GitHub OAuth, Google OAuth, and email/password credentials. Sessions are JWT-based; the user role is encoded directly in the token.
+  </Card>
+  <Card title="Admin dashboard (/admin)" icon="chart-line" href="/admin/overview">
+    A role-protected area for site owners. Includes sub-routes for products, categories, orders, customers, coupons, carousel, support tickets, sponsored messages, seasonal effects, and site settings.
+  </Card>
+  <Card title="User account (/settings, /licenses)" icon="user-gear" href="/auth/user-roles">
+    Authenticated customers can update their profile in `/settings` and view their purchased license keys in `/licenses`.
+  </Card>
+  <Card title="API routes (/api)" icon="code" href="/shop/payments">
+    Server-side API handlers live under `/api`. Key routes include `/api/webhooks/stripe` for Stripe webhook processing, `/api/checkout` for session creation, `/api/payment` for PayPal, `/api/download` for licensed file delivery, `/api/auth` for NextAuth handlers, and `/api/contact` for the contact form.
+  </Card>
+</CardGroup>
+
+## Request flow
+
+A typical purchase looks like this:
+
+<Steps>
+  <Step title="Authentication check">
+    The Next.js middleware (`middleware.ts`) runs on every request that is not a static asset or API call. It reads the JWT session and enforces two rules: unauthenticated users are redirected to `/auth/signin` if they try to reach `/admin`, and non-admin users are redirected to `/` if they reach any `/admin` route.
+  </Step>
+  <Step title="Product page & checkout">
+    The customer browses `/shop`, selects a product, and clicks checkout. A Server Action (or API route) creates a Stripe Checkout Session or prepares a PayPal order. The customer completes payment on the provider's hosted page.
+  </Step>
+  <Step title="Webhook processing">
+    Stripe sends a `checkout.session.completed` event to `/api/webhooks/stripe`. The handler verifies the signature with `STRIPE_WEBHOOK_SECRET`, marks the order as completed in MySQL, and generates license keys for each purchased product.
+  </Step>
+  <Step title="Post-purchase delivery">
+    After checkout, the customer lands on `/shop/success`. License keys are accessible at `/licenses`. If the product has a `filePath`, the customer can download it through `/api/download` which validates the active license before serving the file.
+  </Step>
+</Steps>
+
+## Data layer
+
+The application uses Prisma ORM with a MySQL database. The schema (`prisma/schema.prisma`) defines the following core models:
+
+| Model | Purpose |
+|---|---|
+| `User` | Registered users with role (`CUSTOMER` or `ADMIN`) |
+| `Account` / `Session` | NextAuth.js OAuth account links and sessions |
+| `Product` | Digital products with pricing, stock, and optional file path |
+| `Category` | Product categories with slug-based routing |
+| `Order` / `OrderItem` | Purchase records linked to Stripe sessions |
+| `LicenseKey` | Generated keys tied to a user, product, and order |
+| `Coupon` | Discount codes (percentage or fixed amount) |
+| `PaymentMethod` | Enabled payment providers and their configuration |
+| `SiteSettings` | JSON key-value store for admin-configurable settings |
+| `Ticket` / `ChatMessage` | Support ticket system with live chat |
+| `CarouselItem` | Homepage hero carousel content |
+
+<Note>
+  Prices are stored in cents (integers) throughout the schema, matching Stripe's convention. Always divide by 100 when displaying prices to users.
+</Note>
+
+## Authentication layer
+
+NextAuth.js v5 is configured in `auth.config.ts` with two OAuth providers (GitHub and Google) and JWT sessions. The JWT callback copies the `role` field from the database user record into the token so that the middleware and server components can access the role without an extra database query.
+
+```
+Request
+  └─ middleware.ts          reads JWT session, enforces role rules
+       └─ auth.config.ts    JWT + session callbacks, provider config
+            └─ NextAuth     issues/validates tokens, manages OAuth flow
+                 └─ Prisma adapter  persists users, accounts, sessions to MySQL
+```
+
+## Payment flow
+
+Two payment providers are supported and can be toggled independently from the admin dashboard via the `PaymentMethod` table:
+
+```
+Customer selects product
+  ├─ Stripe path
+  │    └─ /api/checkout        creates Stripe Checkout Session
+  │         └─ Stripe hosted page
+  │              └─ /api/webhooks/stripe   webhook: create Order + LicenseKey
+  │
+  └─ PayPal path
+       └─ PayPal button (client-side @paypal/react-paypal-js)
+            └─ /api/payment    server-side order capture + Order + LicenseKey
+```
+
+## Key libraries
+
+<CardGroup cols={2}>
+  <Card title="Next.js 16 App Router" icon="layer-group">
+    Server Components, Server Actions, and route handlers provide the full-stack backbone. The App Router enables fine-grained caching and streaming at the route segment level.
+  </Card>
+  <Card title="React 19" icon="react">
+    The UI is built on React 19, taking advantage of concurrent rendering improvements. All interactive client components are explicitly marked with `"use client"`.
+  </Card>
+  <Card title="Three.js & @react-three/fiber" icon="cube">
+    Three.js renders the 3D animated scene in the portfolio hero section. `@react-three/fiber` provides a declarative React wrapper; `@react-three/drei` adds helpers like `OrbitControls` and environment presets.
+  </Card>
+  <Card title="Framer Motion" icon="wand-magic-sparkles">
+    Page transitions, scroll-triggered animations, and micro-interactions across the portfolio and shop are handled by Framer Motion.
+  </Card>
+  <Card title="Prisma ORM" icon="database">
+    Prisma provides a type-safe database client generated from `schema.prisma`. Migrations are managed with `prisma migrate dev`; the client is auto-generated in `postinstall`.
+  </Card>
+  <Card title="Tailwind CSS & Radix UI" icon="palette">
+    Tailwind CSS handles utility-first styling. Radix UI primitives (accordion, dialog, dropdown, tabs, etc.) provide accessible, unstyled components that are themed with Tailwind via the shadcn/ui convention.
+  </Card>
+</CardGroup>

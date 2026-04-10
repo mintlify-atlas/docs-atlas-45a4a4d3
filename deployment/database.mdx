@@ -1,0 +1,151 @@
+---
+title: 'Database setup: MySQL and Prisma migrations'
+description: 'Provision a MySQL database, run Prisma migrations, seed sample product data, and promote the first admin user to access the dashboard.'
+---
+
+The portfolio app uses MySQL as its database and [Prisma](https://www.prisma.io) as the ORM. Prisma manages the schema (`prisma/schema.prisma`), migrations, and the generated type-safe client. You need a running MySQL instance and a valid `DATABASE_URL` before the app can start.
+
+The schema defines models for users, sessions, products, orders, license keys, coupons, payment methods, support tickets, chat messages, carousel items, site settings, and more. All of this is created by running the Prisma migrations — you do not write SQL by hand.
+
+## Hosting options
+
+You can use any MySQL-compatible host. Two options with free tiers that work well for Next.js deployments:
+
+<CardGroup cols={2}>
+  <Card title="PlanetScale" icon="database" href="https://planetscale.com">
+    Serverless MySQL platform. Provides a connection string you can paste directly into `DATABASE_URL`. Free hobby tier available.
+  </Card>
+  <Card title="Railway" icon="server" href="https://railway.app">
+    General-purpose cloud platform with a managed MySQL plugin. Generates connection variables in the project dashboard.
+  </Card>
+</CardGroup>
+
+Both services provide a connection string in the format the app expects:
+
+```bash
+mysql://USER:PASSWORD@HOST:PORT/DATABASE
+```
+
+Set this as `DATABASE_URL` in `.env.local` (local development) or in your Vercel project settings (production).
+
+## Setup flow
+
+<Steps>
+  <Step title="Provision a MySQL database">
+    Create a database on PlanetScale, Railway, or any MySQL host. Copy the connection string and set it as `DATABASE_URL`.
+
+    ```bash .env.local
+    DATABASE_URL="mysql://admin:s3cr3t@db.example.com:3306/portfolio"
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Running `npm install` automatically triggers the `postinstall` script defined in `package.json`, which runs `prisma generate` to produce the Prisma Client from the current schema.
+
+    ```bash
+    npm install
+    ```
+
+    If you ever update `prisma/schema.prisma` manually, regenerate the client with:
+
+    ```bash
+    npx prisma generate
+    ```
+  </Step>
+
+  <Step title="Run migrations">
+    Apply all pending migrations to create the database schema.
+
+    **Development** — creates a migration history and applies changes interactively:
+
+    ```bash
+    npx prisma migrate dev
+    ```
+
+    **Production** — applies pending migrations without prompting (safe for CI/CD):
+
+    ```bash
+    npx prisma migrate deploy
+    ```
+
+    <Note>
+    The project currently has one migration: `20251206212422_add_site_settings`. Running either command applies it and creates all tables defined in the schema.
+    </Note>
+  </Step>
+
+  <Step title="Seed initial data (optional)">
+    `prisma/seed.js` inserts three sample products into the database using `upsert`, so it is safe to run multiple times:
+
+    - Developer Starter Kit ($29)
+    - Pro Icon Pack ($49)
+    - Ultimate UI Bundle ($99)
+
+    Run the seed script with:
+
+    ```bash
+    node prisma/seed.js
+    ```
+
+    <Note>
+    The `prisma` key is not configured in `package.json` for automatic seeding, so `npx prisma db seed` will not work unless you add it. Use `node prisma/seed.js` directly.
+    </Note>
+  </Step>
+
+  <Step title="Promote the first admin user">
+    After signing in to the app at least once (via GitHub or Google OAuth, or email/password), promote your account to the `ADMIN` role using one of the utility scripts in `prisma/`.
+
+    First, list existing users to confirm your account exists:
+
+    ```bash
+    node prisma/list-users.js
+    ```
+
+    Then promote by email. Edit `prisma/promote-admin.js`, replace the `email` constant with your address, and run:
+
+    ```bash
+    node prisma/promote-admin.js
+    ```
+
+    Alternatively, `prisma/make-admin.js` serves the same purpose with a slightly different implementation — edit the `email` constant there and run:
+
+    ```bash
+    node prisma/make-admin.js
+    ```
+
+    Both scripts update the `role` field on the `User` record from `CUSTOMER` to `ADMIN`.
+
+    <Warning>
+    These scripts connect directly to the database using `DATABASE_URL`. Make sure you are targeting the correct environment before running them in production.
+    </Warning>
+  </Step>
+</Steps>
+
+## Schema overview
+
+The Prisma schema lives at `prisma/schema.prisma`. Key models:
+
+| Model | Purpose |
+|---|---|
+| `User` | Registered users; `role` field is `CUSTOMER` or `ADMIN` |
+| `Account` / `Session` | NextAuth.js OAuth accounts and sessions |
+| `Product` | Items for sale; price stored in cents |
+| `Order` / `OrderItem` | Purchase records linked to Stripe session IDs |
+| `LicenseKey` | Generated keys delivered after purchase |
+| `Coupon` | Discount codes with percentage or fixed-amount values |
+| `PaymentMethod` | Configurable payment methods (Stripe, bank transfer) |
+| `Ticket` / `ChatMessage` | Support ticket system with chat |
+| `SiteSettings` | Key/value store for admin-configurable settings |
+| `CarouselItem` | Homepage carousel entries managed via admin panel |
+
+## Prisma commands reference
+
+| Command | What it does |
+|---|---|
+| `npx prisma generate` | Regenerate the Prisma Client after schema changes |
+| `npx prisma migrate dev` | Create and apply a new migration (development) |
+| `npx prisma migrate deploy` | Apply pending migrations (production / CI) |
+| `npx prisma studio` | Open a web-based database browser at `localhost:5555` |
+| `node prisma/seed.js` | Insert sample products |
+| `node prisma/list-users.js` | Print all users to stdout |
+| `node prisma/promote-admin.js` | Set a user's role to `ADMIN` |
+| `node prisma/make-admin.js` | Alternative admin promotion script |

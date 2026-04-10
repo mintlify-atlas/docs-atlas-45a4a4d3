@@ -1,0 +1,103 @@
+---
+title: 'User Roles and Permissions — Levi.dev Portfolio'
+description: 'Understand the difference between the CUSTOMER and ADMIN roles, what each role can do, and how access is enforced across the site.'
+---
+
+Every account on the Levi.dev portfolio has a role that determines what it can see and do. Most users are assigned the **CUSTOMER** role when they register. The **ADMIN** role unlocks full control over the site, including the admin dashboard. Two additional staff roles — **MODERATOR** and **SUPPORT** — are defined in the role system with permissions intended for partial admin access, though dashboard access is currently enforced at the middleware level for `ADMIN` only.
+
+## Role overview
+
+| Role | Default for new accounts | Admin dashboard access |
+|------|:---:|:---:|
+| CUSTOMER | Yes | No |
+| SUPPORT | No | No (defined in role system) |
+| MODERATOR | No | No (defined in role system) |
+| ADMIN | No | Full |
+
+## CUSTOMER
+
+When you create an account, you are automatically assigned the CUSTOMER role. This role is designed for anyone who browses the shop, purchases products, or needs help through the support system.
+
+<CardGroup cols={2}>
+  <Card title="Browse the shop" icon="store">
+    View all listed products, categories, and pricing — no account required to browse, but you must be signed in to purchase.
+  </Card>
+  <Card title="Purchase products" icon="credit-card">
+    Complete checkout and receive order confirmation, license keys, and downloadable files.
+  </Card>
+  <Card title="Order history" icon="receipt">
+    Review all past orders, amounts, and statuses from your account.
+  </Card>
+  <Card title="License keys" icon="key">
+    Access and copy your active license keys linked to purchased products.
+  </Card>
+  <Card title="Downloads" icon="download">
+    Download digital files included with your purchases.
+  </Card>
+  <Card title="Support" icon="headphones">
+    Open support tickets and communicate with staff through the support system.
+  </Card>
+</CardGroup>
+
+## ADMIN
+
+The ADMIN role has unrestricted access to the entire site, including the `/admin` dashboard. In addition to everything a CUSTOMER can do, an ADMIN can manage all aspects of the store and its content.
+
+<CardGroup cols={2}>
+  <Card title="Manage products" icon="package">
+    Create, edit, and delete products. Control pricing, stock, categories, files, and visibility.
+  </Card>
+  <Card title="Manage orders" icon="clipboard-list">
+    View all customer orders across the site, update statuses, and handle fulfilment.
+  </Card>
+  <Card title="Manage customers" icon="users">
+    View registered accounts, assign or change roles, and manage user records.
+  </Card>
+  <Card title="Manage coupons" icon="tag">
+    Create and disable discount codes with percentage or fixed-amount values.
+  </Card>
+  <Card title="Manage categories" icon="folder">
+    Add, rename, and reorder product categories displayed in the shop.
+  </Card>
+  <Card title="Site settings" icon="gear">
+    Configure site-wide settings such as seasonal effects, payment methods, and display options.
+  </Card>
+  <Card title="Support tickets" icon="ticket">
+    View and respond to all customer support tickets from the admin panel.
+  </Card>
+  <Card title="Moderate chat" icon="comments">
+    Manage chat messages and reactions across the site.
+  </Card>
+</CardGroup>
+
+## Staff roles
+
+Two additional roles — MODERATOR and SUPPORT — are defined in the role system (`lib/roles.ts`) with permission sets for chat moderation and ticket management respectively. These roles are reserved for future use or custom access control logic added by the site owner.
+
+| Role | Defined permissions |
+|------|--------|
+| **MODERATOR** | `view_admin`, `manage_chat`, `manage_tickets` |
+| **SUPPORT** | `view_admin`, `manage_tickets` |
+
+<Note>
+  The middleware currently grants `/admin` access only to users with the `ADMIN` role. MODERATOR and SUPPORT roles are defined but do not grant dashboard access by default unless the middleware is extended.
+</Note>
+
+## How roles are enforced
+
+Roles are stored in the database on your user record and included in your session token. Every time you load a page, the session is checked against the current value in the database so that role changes take effect immediately without requiring you to sign out.
+
+The `/admin` routes are protected at the middleware level. If you are not signed in, visiting any `/admin` URL redirects you to the sign-in page. If you are signed in but your role is CUSTOMER, you are redirected to the home page instead.
+
+<Note>
+  Roles are not self-service. You cannot upgrade your own role from the account settings page.
+</Note>
+
+## How to become an admin
+
+Admin access is granted directly in the database. The project includes two Prisma utility scripts for this purpose:
+
+- `prisma/make-admin.js` — promotes a user to ADMIN by email address
+- `prisma/promote-admin.js` — an alternative promotion script
+
+These scripts are run by whoever manages the deployment environment. Contact the site owner if you need elevated access for a legitimate reason.

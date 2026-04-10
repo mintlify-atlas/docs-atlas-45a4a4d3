@@ -1,80 +1,151 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quickstart: Run Levi.dev portfolio locally"
+description: "Clone the repository, configure your environment variables, run database migrations, and start the development server in under ten minutes."
 ---
 
-## Get started in three steps
+This guide walks you through getting the application running on your local machine from scratch. You will need Node.js 18+, a MySQL database (local or hosted), and accounts for Stripe and PayPal to complete payment configuration.
 
-Get your documentation site running locally and make your first customization.
+<Steps>
+  <Step title="Clone the repository">
+    Clone the repository and navigate into the project directory:
 
-### Step 1: Set up your local environment
+    ```bash
+    git clone https://github.com/ImLevii/portfolio-v0.git
+    cd portfolio-v0
+    ```
+  </Step>
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Install dependencies">
+    Install all dependencies with your preferred package manager. The `postinstall` script automatically runs `prisma generate` after installation.
 
-### Step 2: Deploy your changes
+    <CodeGroup>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash npm
+    npm install
+    ```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```bash yarn
+    yarn install
+    ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash pnpm
+    pnpm install
+    ```
 
-### Step 3: Go live
+    </CodeGroup>
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Configure environment variables">
+    Copy or create a `.env.local` file in the project root. The following variables are required — the build will fail without them:
+
+    ```bash .env.local
+    # Database
+    DATABASE_URL="mysql://user:password@localhost:3306/portfolio"
+
+    # Authentication (NextAuth.js)
+    AUTH_SECRET="your-random-secret-min-32-chars"
+
+    # GitHub OAuth (optional, enables GitHub sign-in)
+    AUTH_GITHUB_ID="your-github-oauth-app-client-id"
+    AUTH_GITHUB_SECRET="your-github-oauth-app-client-secret"
+
+    # Google OAuth (optional, enables Google sign-in)
+    AUTH_GOOGLE_ID="your-google-oauth-client-id"
+    AUTH_GOOGLE_SECRET="your-google-oauth-client-secret"
+
+    # Stripe
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_..."
+    STRIPE_SECRET_KEY="sk_test_..."
+    STRIPE_WEBHOOK_SECRET="whsec_..."
+
+    # PayPal
+    NEXT_PUBLIC_PAYPAL_CLIENT_ID="your-paypal-client-id"
+    NEXT_PUBLIC_PAYPAL_CLIENT_SECRET="your-paypal-client-secret"
+
+    # App URL (required in production to prevent redirect issues)
+    NEXT_PUBLIC_APP_URL="http://localhost:3000"
+    ```
+
+    <Warning>
+      `AUTH_SECRET`, `DATABASE_URL`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_PAYPAL_CLIENT_ID`, and `NEXT_PUBLIC_PAYPAL_CLIENT_SECRET` are all required. The pre-build check script (`scripts/check-env.js`) will exit with an error if any of these are missing.
+    </Warning>
+
+    <Tip>
+      Generate a strong `AUTH_SECRET` with: `openssl rand -base64 32`
+    </Tip>
+  </Step>
+
+  <Step title="Run database migrations">
+    Apply the Prisma schema to your database. This creates all tables defined in `prisma/schema.prisma`:
+
+    ```bash
+    npx prisma migrate dev --name init
+    ```
+
+    If you are connecting to an existing database and want to sync without creating a migration file, use:
+
+    ```bash
+    npx prisma db push
+    ```
+
+    <Note>
+      The database provider is MySQL. Ensure your `DATABASE_URL` points to a running MySQL instance before running migrations.
+    </Note>
+  </Step>
+
+  <Step title="Seed initial data (optional)">
+    A seed script at `prisma/seed.js` inserts three sample products (Developer Starter Kit, Pro Icon Pack, Ultimate UI Bundle). Run it with:
+
+    ```bash
+    node prisma/seed.js
+    ```
+
+    The script uses `upsert` so it is safe to run multiple times. You can also open Prisma Studio to inspect or add data directly:
+
+    ```bash
+    npx prisma studio
+    ```
+
+    Prisma Studio opens at `http://localhost:5555` and lets you insert rows into any table without writing SQL.
+
+    <Tip>
+      To make yourself an admin, sign in once to create your user record, then run `node prisma/promote-admin.js` (after editing the email constant in the file) or find your row in Prisma Studio and change the `role` field from `CUSTOMER` to `ADMIN`.
+    </Tip>
+  </Step>
+
+  <Step title="Start the development server">
+    Start the Next.js development server:
+
+    ```bash
+    npm run dev
+    ```
+
+    The app is now running at `http://localhost:3000`.
+
+    | Route | Description |
+    |---|---|
+    | `/` | Public portfolio homepage |
+    | `/shop` | Digital product storefront |
+    | `/auth/signin` | Sign-in page |
+    | `/admin` | Admin dashboard (ADMIN role required) |
+    | `/settings` | User account settings |
+    | `/licenses` | User license key management |
+  </Step>
+</Steps>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand how the app is structured and how its layers interact.
+  </Card>
+  <Card title="Environment variables" icon="gear" href="/deployment/environment-variables">
+    Full reference for every environment variable the app uses.
+  </Card>
+  <Card title="Shop & payments" icon="store" href="/shop/overview">
+    Configure Stripe webhooks, add products, and enable payment methods.
+  </Card>
+  <Card title="Deployment" icon="cloud" href="/deployment/deploying">
+    Deploy to Vercel or a self-hosted Node.js server.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

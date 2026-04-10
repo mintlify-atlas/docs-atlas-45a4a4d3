@@ -1,0 +1,288 @@
+---
+title: "Portfolio sections: Hero, About, Skills, Projects, Contact"
+description: "What each of the five Levi.dev portfolio sections displays, how it is structured, and the scroll animations and navbar links that tie them together."
+---
+
+The portfolio is a single-page application composed of five sections rendered in sequence: Hero, About, Skills, Projects, and Contact. Each section is a self-contained React component that receives scroll-triggered animations and renders independently, but they share the same visual language — the Orbitron font, red accent color (`red-500`), and dark cyberpunk aesthetic carried through the whole page.
+
+<AccordionGroup>
+
+  <Accordion title="Hero" icon="house">
+
+    The Hero section (`components/hero.tsx`) is the first thing visitors see. It occupies at least 70% of the viewport height on desktop and contains three layers of visual content.
+
+    **Background**
+
+    The background is composed of several stacked elements:
+
+    - A **Matrix rain canvas** (`MatrixRain`) rendered client-side only, using `dynamic()` import with `ssr: false` to avoid hydration errors.
+    - A **circuit board image** (`/public/images/circuit-bg.png`) with a parallax effect driven by mouse position via CSS custom properties `--mouse-x` and `--mouse-y`.
+    - A **scan line effect** (`.scan-line` CSS class) that sweeps from top to bottom on a loop.
+    - A **circuit animation overlay** (`.circuit-animation`) that flows a red gradient horizontally across the section.
+
+    **Content grid**
+
+    The section uses a two-column grid on large screens. The left column contains the text content and call-to-action buttons; the right column shows the `TerminalEffect` component (hidden on mobile, which gets its own terminal below the grid).
+
+    The headline reads "Full-Stack System Administrator" split across two `motion.span` elements that animate in with a staggered `opacity: 0 → 1, y: 20 → 0` transition.
+
+    **Call-to-action buttons**
+
+    Two inline buttons appear below the headline:
+
+    | Button | Target | Color |
+    |--------|--------|-------|
+    | Showcase (eye icon) | `#projects` | Red (`#ef4444`) |
+    | Contact (mail icon) | `#contact` | Green (`#22c55e`) |
+
+    Both use `el.scrollIntoView({ behavior: 'smooth' })` for smooth anchor navigation.
+
+    **Props**
+
+    The Hero component accepts a `geo` prop passed from the server:
+
+    ```typescript
+    type HeroProps = {
+      geo?: {
+        ip?: string
+        city?: string
+        region?: string
+        country?: string
+        privacy?: any
+      }
+    }
+    ```
+
+    This `geo` object is forwarded to `TerminalEffect` to optionally display the visitor's IP and location in the terminal. The geolocation display code exists in `terminal-effect.tsx` but is currently commented out — the terminal uses `DEFAULT_COMMANDS` instead.
+
+    **Scroll indicator**
+
+    A bouncing `ArrowDown` icon at the bottom of the section links to `#about`.
+
+    **Performance**
+
+    Mouse movement is throttled to 30ms via `useThrottle`. Particle count is halved on mobile (8 instead of 20) and the matrix rain density is reduced from `0.3` to `0.2`. The `AnimatedParticles` component gates itself with a `mounted` state to prevent SSR output.
+
+  </Accordion>
+
+  <Accordion title="About" icon="user">
+
+    The About section (`components/about.tsx`) introduces Levi with a profile photo, a short biography, and a personal information grid.
+
+    **Profile photo**
+
+    The photo is loaded from `/public/images/about.jpg` using Next.js `Image` with `fill`, `priority`, `placeholder="blur"`, and an inline `blurDataURL` for a fast low-quality placeholder. The image has a `border-2 border-red-500/20` rounded container.
+
+    **Biography**
+
+    Two paragraphs describe Levi as a system administrator and full-stack developer with 5+ years of experience. The text is hardcoded in the component:
+
+    > "I am a system administrator and full-stack developer with over 5 years of experience managing infrastructure and building robust backend systems..."
+
+    **Personal info grid**
+
+    A 2×2 grid is rendered from the `personalInfo` array (memoized with `useMemo`):
+
+    ```typescript
+    const personalInfo = useMemo<PersonalInfoItem[]>(() => [
+      { label: "Name",         value: "LEVI",              type: 'text' },
+      { label: "Email",        value: "contact@levi.dev",  type: 'text' },
+      { label: "Location",     value: "Wisconsin, USA",    type: 'text' },
+      { label: "Availability", value: "available",         type: 'availability' }
+    ], [])
+    ```
+
+    The `Availability` field renders a custom `AvailabilityStatus` component with an animated pulsing dot — green when `"available"`, red otherwise.
+
+    **Contact button**
+
+    A styled button with a green mail icon smoothly scrolls to `#contact` via `scrollIntoView`.
+
+    **Scroll-triggered entrance**
+
+    The section uses `useInView(ref, { once: true, margin: "-100px" })` from Framer Motion. The heading fades in from `y: 20`, the photo slides in from `x: -50`, and the text panel slides in from `x: 50`.
+
+  </Accordion>
+
+  <Accordion title="Skills" icon="code">
+
+    The Skills section (`components/skills.tsx`) displays an auto-scrolling carousel of technology logos and names.
+
+    **Tech stack**
+
+    The `techStack` array contains 15 entries. Logos are loaded from CDN URLs (devicons and vectorlogo.zone):
+
+    <CardGroup cols={3}>
+      <Card title="Frontend">
+        React, Next.js, TypeScript, JavaScript, Tailwind CSS, HTML5, CSS3, Three.js, WebGL, Framer Motion
+      </Card>
+      <Card title="Backend & Data">
+        Node.js, MongoDB, PostgreSQL, GraphQL
+      </Card>
+      <Card title="Tooling">
+        Git
+      </Card>
+    </CardGroup>
+
+    **Carousel mechanics**
+
+    The carousel works by duplicating the `techStack` array — the first set has keys `first-0` through `first-14` and the second set uses `second-0` through `second-14`. Both sets run inside a single `div` with the CSS class `animate-scroll` (desktop) or `animate-scroll-mobile` (mobile):
+
+    ```css
+    @keyframes scroll {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .animate-scroll {
+      animation: scroll 20s linear infinite;
+    }
+    ```
+
+    Translating by `-50%` of the duplicated-content width seamlessly loops back to the start.
+
+    **Pause on interaction**
+
+    Mouse down and touch start events add the `.paused` class to the track element. This class is targeted by CSS to pause the animation:
+
+    ```css
+    .carousel-track.paused.animate-scroll {
+      animation-play-state: paused !important;
+    }
+    ```
+
+    **Backdrop**
+
+    The carousel container has a `.carousel-backdrop` class providing a `backdrop-filter: blur(20px)` frosted-glass effect, plus `.carousel-glow`, `.carousel-scan-line`, `.geometric-pattern`, and `.floating-particles` overlays defined in `globals.css`.
+
+    **Scroll-triggered entrance**
+
+    Like the About section, the heading and carousel both animate in via `useInView` with a slight delay offset (`delay: 0.2`).
+
+  </Accordion>
+
+  <Accordion title="Projects" icon="folder-open">
+
+    The Projects section (`components/projects.tsx`) renders a 2-column responsive grid of project cards.
+
+    **Projects array**
+
+    ```typescript
+    const projects = [
+      {
+        title: "Vaded Hosting",
+        description: "A comprehensive server hosting platform offering cloud infrastructure...",
+        image: "/placeholder-animated.svg",
+        customText: "VADED HOSTING",
+        tags: ["Node.js", "React", "Docker", "Kubernetes", "AWS", "Oracle Cloud", "Nginx", "MySQL", "Redis"],
+        liveUrl: "https://vaded-hosting.com",
+        githubUrl: "#",
+      },
+      {
+        title: "Portfolio Website",
+        description: "A responsive portfolio website showcasing projects and skills...",
+        image: "/placeholder-animated.svg",
+        customText: "LEVI.DEV",
+        tags: ["Next.js", "React", "TypeScript", "Tailwind CSS", "Framer Motion", "Three.js", "Radix UI"],
+        liveUrl: "#",
+        githubUrl: "#",
+      },
+      // Two placeholder entries with empty title/description/tags
+    ]
+    ```
+
+    <Note>
+      Two of the four project slots are currently empty placeholders. Add a `title`, `description`, `image`, `customText`, `tags`, and `liveUrl` to fill them in — see [Customization](/portfolio/customization).
+    </Note>
+
+    **Card layout**
+
+    Each card uses the `.card` CSS class (`rounded-lg bg-black/50 border border-white/10 backdrop-blur-sm`). The card has two zones:
+
+    1. **Image area** — A 600×400 image with `group-hover:scale-110` zoom. If `customText` is set, it overlays the image centered in a large Orbitron font. On hover, an action overlay appears with a live-link button (the GitHub button is commented out).
+    2. **Content area** — Title, description, and tag pills (`bg-red-500/10 text-red-400`).
+
+    **Staggered animation**
+
+    Cards animate in with `useInView` and a stagger: each card's delay is `0.2 * index`, so the first card appears at 200ms, the second at 400ms, and so on.
+
+    **GitHub link**
+
+    A "View More on GitHub" button appears below the grid and links to `https://github.com`.
+
+  </Accordion>
+
+  <Accordion title="Contact" icon="envelope">
+
+    The Contact section (`components/contact.tsx`) contains a full-width contact form and a footer with social links.
+
+    **Contact form**
+
+    The form collects four fields:
+
+    | Field | Type | Validation |
+    |-------|------|-----------|
+    | Name | `text` | Required |
+    | Email | `email` | Required |
+    | Subject | `text` | Required |
+    | Message | `textarea` (5 rows) | Required |
+
+    Each field uses a floating label pattern: the `<label>` is positioned over the input using `peer` utilities and transitions to a smaller label above the field on focus or when filled.
+
+    **Form submission**
+
+    On submit, the form `POST`s to `/api/contact` as JSON:
+
+    ```typescript
+    const res = await fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData),
+    })
+    ```
+
+    The submit button has three animated states managed by `AnimatePresence`:
+
+    | State | Appearance |
+    |-------|-----------|
+    | Ready | Green mail icon + "Send Message" |
+    | Loading | Yellow spinning icon + "Sending..." |
+    | Success | Green animated checkmark + "Message Sent!" + particle burst |
+
+    Error responses render a red error banner below the form with an `X` icon.
+
+    **Animated form background**
+
+    The `AnimatedFormBg` component renders a `bg-gradient-to-br from-red-900/10 via-black/40 to-red-700/10` div with the `animate-gradient-x` Tailwind animation and a `.bg-circuit-pattern` overlay.
+
+    **Footer**
+
+    The footer appears below the contact form and contains:
+
+    - Copyright line: `© {year} LEVIK.DEV All rights reserved.`
+    - Three social icon buttons: **GitHub**, **Twitter/X**, and **LinkedIn** — all currently link to `#`.
+
+    <Tip>
+      To update social links, edit the `href` values on the `<a>` tags inside the `<footer>` element in `components/contact.tsx`. See [Customization](/portfolio/customization) for details.
+    </Tip>
+
+  </Accordion>
+
+</AccordionGroup>
+
+## Navigation
+
+The `Navbar` component (`components/navbar.tsx`) links to each section using anchor hrefs. On the portfolio home page (`/`), the links are:
+
+```typescript
+const mainLinks = [
+  { name: "HOME",     href: "/#home" },
+  { name: "ABOUT",   href: "/#about" },
+  { name: "SKILLS",  href: "/#skills" },
+  { name: "PROJECTS", href: "/#projects" },
+  { name: "SHOP",    href: "/shop" },
+  { name: "CONTACT", href: "/#contact" },
+]
+```
+
+The navbar becomes `bg-black/40` with `backdrop-blur-md` once the page is scrolled past 20px, transitioning from fully transparent. On shop and admin routes it switches its accent color from red to green.

@@ -1,0 +1,93 @@
+---
+title: 'Authentication Overview — Levi.dev Portfolio'
+description: 'How to create an account, sign in with email and password or OAuth, manage your profile in settings, and sign out of the Levi.dev portfolio site.'
+---
+
+Creating an account gives you access to your order history, license keys, digital downloads, and account settings. This page walks you through registering, signing in, managing your profile, and signing out.
+
+## Create an account
+
+To get started, navigate to the `/auth/signup` page on the site. You will need a name, a valid email address, and a password. After your account is created you are signed in automatically and redirected to the home page — no extra confirmation step required.
+
+<Steps>
+  <Step title="Go to the sign-up page">
+    Visit `/auth/signup` on the site. You will see the registration form.
+  </Step>
+  <Step title="Enter your details">
+    Fill in your full name, email address, and a password. All three fields are required.
+  </Step>
+  <Step title="Submit the form">
+    Click **Sign Up**. Your account is created and you are signed in immediately.
+  </Step>
+</Steps>
+
+<Note>
+  Each email address can only be registered once. If you see an error saying the account already exists, try signing in instead or use a different email.
+</Note>
+
+## Sign in
+
+If you already have an account, go to `/auth/signin` on the site and enter your credentials.
+
+<Steps>
+  <Step title="Go to the sign-in page">
+    Visit `/auth/signin` or click the **Sign In** button in the navigation.
+  </Step>
+  <Step title="Enter your email and password">
+    Type the email address and password you registered with.
+  </Step>
+  <Step title="Submit the form">
+    Click **Sign In**. You are redirected to the page you were trying to reach, or to the home page.
+  </Step>
+</Steps>
+
+<Warning>
+  If your credentials are incorrect the form will return an error. Double-check your email address and password. Passwords are case-sensitive.
+</Warning>
+
+## What you can access when signed in
+
+Once authenticated you have access to the following sections of the site:
+
+<CardGroup cols={2}>
+  <Card title="Order history" icon="receipt">
+    View all past purchases, order amounts, dates, and statuses from your account dashboard.
+  </Card>
+  <Card title="License keys" icon="key">
+    Access and copy the license keys attached to your purchased products.
+  </Card>
+  <Card title="Downloads" icon="download">
+    Download digital files included with your orders directly from your account.
+  </Card>
+  <Card title="Account settings" icon="user">
+    Update your name, email address, avatar, and password from the `/settings` page.
+  </Card>
+</CardGroup>
+
+## Account settings
+
+Visit `/settings` on the site to manage your profile and security details. The page is only accessible to signed-in users — if you are not authenticated you will be redirected to the sign-in page.
+
+### Profile settings
+
+| Field | Description |
+|-------|-------------|
+| **Name** | The display name shown across the site. |
+| **Email** | The address used to sign in and receive order notifications. |
+| **Avatar URL** | A link to an image used as your profile picture. Paste a direct image URL. |
+
+### Change password
+
+You can update your password by entering your current password and a new one in the **Change Password** section. This section is only relevant for accounts created with email and password; if you signed up a different way, the password section does not apply to your account.
+
+<Tip>
+  Choose a strong, unique password. A good password is at least 12 characters long and mixes letters, numbers, and symbols.
+</Tip>
+
+## Sessions and staying signed in
+
+Your session is maintained automatically using a secure token. You remain signed in across browser tabs and page refreshes until the session expires or you sign out manually. There is no "remember me" toggle — the session persists by default.
+
+## Sign out
+
+To end your session, click the **Sign Out** option in the account menu. Your session token is invalidated immediately and you are returned to the home page. Any pages that require authentication will redirect you back to `/auth/signin` until you sign in again.

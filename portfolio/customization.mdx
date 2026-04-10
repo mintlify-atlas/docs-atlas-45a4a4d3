@@ -1,0 +1,444 @@
+---
+title: "Personalizing the portfolio: content, colors, and effects"
+description: "How to update personal info, projects, tech stack, primary accent color, matrix rain settings, social links, and the terminal demo sequence in the portfolio."
+---
+
+The portfolio is designed to be forked and personalized. Most content is defined as plain TypeScript arrays and object literals in the component files — no CMS or database required. This guide walks through every common customization in the order you'd most likely want to make them.
+
+<Note>
+  All file paths below are relative to the project root — the directory created when you clone the repository.
+</Note>
+
+## Personal information
+
+Your name, email, location, and availability status are defined in `components/about.tsx` inside the `personalInfo` array.
+
+<Steps>
+
+  <Step title="Open components/about.tsx">
+    Find the `personalInfo` array near the top of the `About` component:
+
+    ```typescript
+    const personalInfo = useMemo<PersonalInfoItem[]>(() => [
+      { label: "Name",         value: "LEVI",              type: 'text' },
+      { label: "Email",        value: "contact@levi.dev",  type: 'text' },
+      { label: "Location",     value: "Wisconsin, USA",    type: 'text' },
+      { label: "Availability", value: "available",         type: 'availability' }
+    ], [])
+    ```
+  </Step>
+
+  <Step title="Update your details">
+    Replace the `value` fields with your own information:
+
+    ```typescript
+    const personalInfo = useMemo<PersonalInfoItem[]>(() => [
+      { label: "Name",         value: "YOUR NAME",           type: 'text' },
+      { label: "Email",        value: "you@yourdomain.com",  type: 'text' },
+      { label: "Location",     value: "City, Country",       type: 'text' },
+      { label: "Availability", value: "available",           type: 'availability' }
+    ], [])
+    ```
+
+    The `Availability` field accepts `"available"`, `"busy"`, or `"unavailable"`. Green dot renders for `"available"`, red for everything else.
+  </Step>
+
+  <Step title="Update the biography text">
+    The two paragraphs below the personal info grid are hardcoded in the JSX. Find and update them:
+
+    ```typescript
+    <p className="text-gray-300 mb-6 leading-relaxed">
+      I am a system administrator and full-stack developer with over 5 years...
+    </p>
+    <p className="text-gray-300 mb-8 leading-relaxed">
+      I specialize in server administration, database management...
+    </p>
+    ```
+  </Step>
+
+  <Step title="Replace the profile photo">
+    The photo is loaded from `/public/images/about.jpg`. Replace that file with your own image. Keep the filename the same, or update the `imageUrl` constant:
+
+    ```typescript
+    const imageUrl = "/images/about.jpg"
+    ```
+
+    The image renders in a square aspect ratio container (`aspect-square`). A square or near-square crop works best. Next.js `Image` expects the file in the `public/` directory.
+  </Step>
+
+</Steps>
+
+---
+
+## Projects
+
+Projects are defined in the `projects` array at the top of `components/projects.tsx`.
+
+<Steps>
+
+  <Step title="Open components/projects.tsx">
+    Find the `projects` array:
+
+    ```typescript
+    const projects = [
+      {
+        title: "Vaded Hosting",
+        description: "A comprehensive server hosting platform...",
+        image: "/placeholder-animated.svg",
+        customText: "VADED HOSTING",
+        tags: ["Node.js", "React", "Docker", "Kubernetes", "AWS", "Oracle Cloud", "Nginx", "MySQL", "Redis"],
+        liveUrl: "https://vaded-hosting.com",
+        githubUrl: "#",
+      },
+      // ...
+    ]
+    ```
+  </Step>
+
+  <Step title="Edit or add a project entry">
+    Each project object has these fields:
+
+    | Field | Type | Description |
+    |-------|------|-------------|
+    | `title` | `string` | Project name displayed below the image |
+    | `description` | `string` | Short description paragraph |
+    | `image` | `string` | Path to project screenshot in `/public/` |
+    | `customText` | `string` | Large text overlaid on the image (optional) |
+    | `tags` | `string[]` | Tech stack pills shown below the description |
+    | `liveUrl` | `string` | URL for the external link button |
+    | `githubUrl` | `string` | URL for the GitHub button (currently hidden) |
+
+    To add a real project to one of the two empty placeholder slots, fill in all fields:
+
+    ```typescript
+    {
+      title: "My New Project",
+      description: "A short description of what the project does and the problem it solves.",
+      image: "/images/my-project.png",
+      customText: "MY PROJECT",
+      tags: ["Next.js", "TypeScript", "Tailwind CSS"],
+      liveUrl: "https://my-project.com",
+      githubUrl: "https://github.com/yourusername/my-project",
+    },
+    ```
+  </Step>
+
+  <Step title="Add a project screenshot">
+    Place the image in the `public/images/` directory and reference it with a root-relative path:
+
+    ```typescript
+    image: "/images/my-project.png",
+    ```
+
+    The card renders the image at `600×400` with `object-cover`. A 3:2 landscape crop gives the best result. If you don't have a screenshot, leave `image: "/placeholder-animated.svg"` and set `customText` instead.
+  </Step>
+
+  <Step title="Enable the GitHub button (optional)">
+    The GitHub icon button in each card hover overlay is commented out. To re-enable it, find the commented block in `components/projects.tsx` and uncomment it:
+
+    ```typescript
+    {/* Uncomment the block below to show the GitHub button */}
+    <a
+      href={project.githubUrl}
+      className="w-10 h-10 rounded-full bg-black/70 flex items-center justify-center text-white hover:bg-red-600 transition-colors"
+      aria-label="View GitHub repository"
+    >
+      <Github className="h-5 w-5" />
+    </a>
+    ```
+  </Step>
+
+</Steps>
+
+---
+
+## Tech stack
+
+The skills carousel is driven by the `techStack` array in `components/skills.tsx`.
+
+<Steps>
+
+  <Step title="Open components/skills.tsx">
+    Find the `techStack` array at the top of the file:
+
+    ```typescript
+    const techStack = [
+      { name: "React",      logo: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg" },
+      { name: "Next.js",    logo: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nextjs/nextjs-original.svg" },
+      { name: "TypeScript", logo: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg" },
+      // ... 12 more entries
+    ]
+    ```
+  </Step>
+
+  <Step title="Add or remove technologies">
+    Each entry has a `name` (displayed below the logo) and a `logo` (URL or path to the icon). CDN sources used in the project:
+
+    - **devicons**: `https://cdn.jsdelivr.net/gh/devicons/devicon/icons/{name}/{name}-original.svg`
+    - **vectorlogo.zone**: `https://www.vectorlogo.zone/logos/{name}/{name}-icon.svg`
+    - **icon-icons.com**: Direct PNG URL
+
+    To add a technology:
+
+    ```typescript
+    { name: "Rust", logo: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/rust/rust-plain.svg" },
+    ```
+
+    To remove a technology, delete its entry from the array.
+
+    <Note>
+      The carousel duplicates the array to create a seamless loop. Adding or removing items adjusts the loop duration automatically — the animation runs at a fixed `20s` per full scroll regardless of count.
+    </Note>
+  </Step>
+
+</Steps>
+
+---
+
+## Primary color
+
+The portfolio's accent color is red. It is applied through several layers.
+
+<Tabs>
+  <Tab title="Tailwind classes">
+    The primary red used in components is Tailwind's `red-500` (`#ef4444`). Key usage locations:
+
+    | Component | Usage |
+    |-----------|-------|
+    | `about.tsx` | Section heading `<span className="text-red-500">Me</span>` |
+    | `skills.tsx` | Section heading and underline bar `bg-red-500` |
+    | `projects.tsx` | Tag pills `bg-red-500/10 text-red-400`, section heading |
+    | `contact.tsx` | Input focus ring `focus:ring-[#ff3b3b]`, heading span |
+    | `navbar.tsx` | Active link underline, accent color |
+    | `globals.css` | `.card` hover border, `.neon-text`, `.neon-border`, `.circuit-pattern` |
+
+    To change the primary color globally, do a find-and-replace for `red-500`, `red-400`, `red-600`, `#ef4444`, `#ff0000`, and `#ff3b3b` across all component files.
+  </Tab>
+  <Tab title="globals.css">
+    Several CSS classes reference the red color directly:
+
+    ```css
+    /* Neon glow */
+    .neon-text {
+      text-shadow: 0 0 5px rgba(255, 0, 0, 0.7),
+                   0 0 10px rgba(255, 0, 0, 0.5),
+                   0 0 15px rgba(255, 0, 0, 0.3);
+    }
+
+    /* Circuit board pattern overlay */
+    .circuit-pattern {
+      background-image:
+        linear-gradient(rgba(255, 0, 0, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 0, 0, 0.05) 1px, transparent 1px);
+    }
+
+    /* Glowing button hover */
+    .glow-button::before {
+      background: linear-gradient(45deg, #ff0000, #ff3333, #ff0000);
+    }
+
+    /* Card hover border */
+    .card {
+      @apply hover:border-red-500/50 hover:shadow-red-500/20;
+    }
+    ```
+
+    Update each `rgba(255, 0, 0, ...)` and `#ff0000` / `#ff3333` value to your new color.
+  </Tab>
+  <Tab title="tailwind.config.ts">
+    To add a custom color token, extend the theme in `tailwind.config.ts`:
+
+    ```typescript
+    extend: {
+      colors: {
+        // Add a custom accent color
+        accent: {
+          DEFAULT: '#your-color',
+          light: '#your-lighter-shade',
+          dark: '#your-darker-shade',
+        },
+      },
+    }
+    ```
+
+    Then replace `red-500` references with `accent` in component class names.
+  </Tab>
+</Tabs>
+
+---
+
+## Matrix rain settings
+
+The `MatrixRain` component is configured in `components/hero.tsx`. You can change the appearance of the falling characters without touching the component itself.
+
+<Steps>
+
+  <Step title="Find the MatrixRain usage in hero.tsx">
+    ```typescript
+    <MatrixRain
+      color="#ff0000"
+      glowIntensity={0.3}
+      density={isMobile ? 0.2 : 0.3}
+      speed={0.8}
+      opacity={0.4}
+      interactive={false}
+      enabled={true}
+    />
+    ```
+  </Step>
+
+  <Step title="Adjust the props">
+
+    | Prop | Current | Effect |
+    |------|---------|--------|
+    | `color` | `"#ff0000"` | Hex color of the falling characters. Change to any hex value. |
+    | `glowIntensity` | `0.3` | Shadow blur on head characters. Higher = more bloom. Range: `0`–`2`. |
+    | `density` | `0.2` / `0.3` | Column density multiplier. `1.0` = maximum columns. `0.3` = ~30% of max. |
+    | `speed` | `0.8` | Base fall speed. `2.0` = default speed. `0.8` = slower. |
+    | `opacity` | `0.4` | Overall canvas opacity. `0.4` = subtle. `0.8` = intense. |
+    | `interactive` | `false` | Set to `true` to make drops near the cursor glow brighter. |
+    | `enabled` | `true` | Set to `false` to remove the matrix rain entirely. |
+
+    Example — green matrix rain at higher density:
+
+    ```typescript
+    <MatrixRain
+      color="#00ff41"
+      glowIntensity={0.6}
+      density={isMobile ? 0.4 : 0.7}
+      speed={1.2}
+      opacity={0.5}
+      interactive={true}
+      enabled={true}
+    />
+    ```
+
+  </Step>
+
+</Steps>
+
+---
+
+## Social links
+
+Social links are in the `<footer>` inside `components/contact.tsx`. Currently all three link to `#`.
+
+<Steps>
+
+  <Step title="Find the footer in contact.tsx">
+    Scroll to the bottom of the file to the `<footer>` element. There are three `<a>` tags with `aria-label` attributes:
+
+    ```typescript
+    <a href="#" aria-label="GitHub">
+      <Github className="h-5 w-5" />
+    </a>
+
+    <a href="#" aria-label="Twitter">
+      {/* Twitter/X SVG icon */}
+    </a>
+
+    <a href="#" aria-label="LinkedIn">
+      {/* LinkedIn SVG icon */}
+    </a>
+    ```
+  </Step>
+
+  <Step title="Replace the href values">
+    Update each `href="#"` with your actual profile URL:
+
+    ```typescript
+    <a
+      href="https://github.com/yourusername"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="GitHub"
+    >
+      <Github className="h-5 w-5" />
+    </a>
+
+    <a
+      href="https://twitter.com/yourhandle"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Twitter"
+    >
+      {/* SVG */}
+    </a>
+
+    <a
+      href="https://linkedin.com/in/yourprofile"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="LinkedIn"
+    >
+      {/* SVG */}
+    </a>
+    ```
+
+    Add `target="_blank" rel="noopener noreferrer"` to open external links safely in a new tab.
+  </Step>
+
+  <Step title="Update the copyright line (optional)">
+    The footer also contains a copyright line:
+
+    ```typescript
+    <p className="text-gray-400">
+      © {new Date().getFullYear()} LEVIK.DEV All rights reserved.
+    </p>
+    ```
+
+    Replace `LEVIK.DEV` with your own name or domain.
+  </Step>
+
+</Steps>
+
+---
+
+## Terminal default commands
+
+The demo sequence typed in the terminal is defined in `components/terminal-effect.tsx` as `DEFAULT_COMMANDS`.
+
+```typescript
+const DEFAULT_COMMANDS = [
+  "Welcome to Levi's Portfolio",
+  "",
+  "npm install portfolio",
+  "Initializing developer profile...",
+  "Loading skills and experience...",
+  "Importing creative solutions...",
+  "export default function Developer() {",
+  "  return (",
+  "    <FullStackDeveloper",
+  "      frontend={['React', 'Next.js', 'TypeScript', 'Tailwind CSS', 'Three.js']}",
+  "      backend={['Node.js', 'Express.js', 'MongoDB', 'GraphQL', 'MySQL/Prisma']}",
+  '      passion="Building modern web experiences"',
+  "    />",
+  "  )",
+  "}",
+  "Looking to collaborate? Contact me below.",
+]
+```
+
+Replace any string in the array with your own content. Empty strings `""` insert a blank line. The terminal types at 50ms per character by default — you can change this with the `typingSpeed` prop on `<TerminalEffect typingSpeed={30} />` in `hero.tsx`.
+
+<Warning>
+  The `commands` prop on `TerminalEffect` is overridden at the bottom of the component: `commands = [...DEFAULT_COMMANDS]`. If you want to pass a custom command sequence via props, remove or update that override at line 1129 of `terminal-effect.tsx`.
+</Warning>
+
+---
+
+## Navbar logo text
+
+The logo in the top-left of the navbar is hardcoded in `components/navbar.tsx`:
+
+```typescript
+<span className="...">
+  LEVIK<span className={accentColor}>.DEV</span>
+</span>
+```
+
+Replace `LEVIK` and `.DEV` with your own brand name or domain.
+
+<Tip>
+  The navbar accent color (`accentColor`) switches automatically between red on portfolio routes and green on shop routes. Update the `isShop` logic in `navbar.tsx` if your routing structure differs.
+</Tip>

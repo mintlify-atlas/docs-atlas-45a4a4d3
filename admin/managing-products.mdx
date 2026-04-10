@@ -1,0 +1,171 @@
+---
+title: 'Admin: Products, Categories, Carousel & Coupons'
+description: 'How to create, edit, and remove products, organise them into categories, configure the hero carousel, and manage discount coupons in the admin dashboard.'
+---
+
+The Products section at `/admin/products` is where you control your entire catalogue — adding new digital goods, editing prices and metadata, toggling visibility, and attaching downloadable files. Related tools for organising that catalogue (Categories, Carousel, Coupons) live in their own sidebar sections and are covered on this page too.
+
+## Products
+
+### Viewing the product list
+
+Navigate to `/admin/products` to see all products sorted by newest first. The table shows each product's name, price (in dollars), and category. Row actions appear when you hover a product:
+
+- **Eye icon** — toggle whether the product is publicly listed in the shop
+- **Pencil icon** — open the product edit form
+- **Trash icon** — permanently delete the product
+
+### Creating a product
+
+<Steps>
+  <Step title="Open the new product form">
+    Click **ADD PRODUCT** in the top-right corner of the products list. This navigates to `/admin/products/new`.
+  </Step>
+  <Step title="Fill in basic info">
+    Enter the **Product Name** and select a **Category** from the dropdown (populated from your categories). Write a **Description** — Markdown is fully supported for rich formatting.
+  </Step>
+  <Step title="Set pricing and inventory">
+    Enter the **Regular Price** in US dollars (e.g. `9.99`). Optionally set a **Sale Price** and check **Enable Sale Status** to activate the discounted price on the storefront.
+
+    Set the **Stock Quantity** — the number of units available for purchase.
+
+    For the **License Duration**, enter the number of days the issued license key should be valid. Leave the field empty to grant a **lifetime** license.
+  </Step>
+  <Step title="Upload media and files">
+    Paste an **Image URL** for the product card thumbnail (800×600 recommended). A live preview updates as you type.
+
+    Under **Digital Product File**, upload the file customers receive after purchase. Files are sent to the `/api/uploads` endpoint and the resulting path is stored in `filePath` on the product record. If a file was previously uploaded, its filename is shown with a "Current File" badge.
+  </Step>
+  <Step title="Add features">
+    In the **Features / Metadata** section, provide a JSON array of feature strings. These appear as bullet points on the product card:
+
+    ```json
+    ["Instant delivery", "Lifetime license", "Priority support"]
+    ```
+  </Step>
+  <Step title="Publish">
+    Click **PUBLISH PRODUCT**. You are redirected back to the products list on success.
+  </Step>
+</Steps>
+
+### Editing a product
+
+Click the pencil icon on any product row to open the edit form at `/admin/products/[id]`. All fields are pre-populated. Click **SAVE CHANGES & UPDATE** to apply edits.
+
+### Listing and unlisting products
+
+The eye icon in each product row controls the `isListed` field:
+
+- **Eye (green)** — the product is visible in the shop. Click to delist it.
+- **Eye-off (grey)** — the product is hidden from shoppers. Click to relist it.
+
+Delisting a product does not delete it or affect existing orders.
+
+<Tip>
+  Use the sale price and "Enable Sale Status" checkbox independently. You can set a sale price in advance and only activate it when you're ready to run a promotion.
+</Tip>
+
+### Product fields reference
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | Displayed on product cards and order receipts |
+| `description` | text | Markdown supported |
+| `price` | integer | Stored in cents; displayed as dollars |
+| `salePrice` | integer (optional) | Stored in cents; shown when `isSale` is true |
+| `isSale` | boolean | Activates the sale price on the storefront |
+| `category` | string | Must match a category name |
+| `features` | JSON string | Array of feature bullet points |
+| `stock` | integer | Available unit count |
+| `isListed` | boolean | Controls shop visibility |
+| `duration` | integer (optional) | License validity in days; null = lifetime |
+| `filePath` | string (optional) | Path to the uploaded digital file |
+| `image` | string | URL of the product image |
+
+---
+
+## Categories
+
+Navigate to `/admin/categories` to manage the taxonomy that organises your products.
+
+### Viewing categories
+
+Categories are listed in ascending `order` value. Each row shows the order number, an optional thumbnail image, the category name, and its URL slug.
+
+### Creating a category
+
+Click **Add Category** to go to `/admin/categories/new`. Fill in:
+
+- **Name** — must be unique; used as the display label
+- **Slug** — auto-generated from the name; used in URLs
+- **Description** (optional)
+- **Image** (optional) — URL of a thumbnail shown in the category list and storefront
+
+The **Order** field controls the sequence in which categories appear. Lower numbers appear first.
+
+### Editing a category
+
+Click the pencil icon on any category row. The edit form at `/admin/categories/[id]` lets you update all fields including the order number.
+
+### Deleting a category
+
+Click the trash icon next to any category. Note that products reference categories by name string — deleting a category does not reassign the products within it. Update those products manually if needed.
+
+<Warning>
+  Deleting a category leaves associated products with a dangling category string. Update or reassign those products after deletion to keep the catalogue consistent.
+</Warning>
+
+---
+
+## Carousel
+
+The hero carousel on the shop homepage is managed at `/admin/carousel`. Each slide (a `CarouselItem`) has the following fields:
+
+| Field | Description |
+|---|---|
+| `title` | Primary heading text on the slide |
+| `subtitle` | Smaller text rendered above or below the title |
+| `description` | Supporting body copy |
+| `cta` | Call-to-action button label |
+| `color` | Primary colour theme for the slide background |
+| `accent` | Accent colour used for highlights |
+| `button` | Button background colour |
+| `order` | Sequence position (lower = earlier) |
+| `isActive` | Whether the slide is shown on the storefront |
+
+Use the **CarouselManager** component on the page to add, edit, reorder, and toggle slides without leaving the admin area.
+
+---
+
+## Coupons
+
+Navigate to `/admin/coupons` to manage discount codes customers can apply at checkout.
+
+### Viewing coupons
+
+The coupon list shows each code, its discount, usage count (used / max), expiry date, and an active toggle switch. Actions appear on row hover.
+
+### Creating a coupon
+
+Click **New Coupon** to open the creation modal. Fill in:
+
+- **Code** — the string customers enter at checkout (e.g. `SUMMER2025`). Must be unique.
+- **Discount Percentage** — integer from 1–100. Applied as a percentage off the order total.
+- **Max Uses** (optional) — leave blank for unlimited redemptions.
+- **Expires At** (optional) — date after which the code stops working.
+
+```
+Example: Code = LAUNCH20, Percent = 20, Max Uses = 100, Expires = 2025-12-31
+```
+
+<Note>
+  Coupons currently support percentage discounts only. Fixed-amount discounts (`amount` field in the schema) are not yet surfaced in the UI.
+</Note>
+
+### Toggling a coupon
+
+Use the toggle switch in the Status column to enable or disable a coupon instantly. Disabled coupons are rejected at checkout even if they haven't expired.
+
+### Deleting a coupon
+
+Hover the coupon row and click the trash icon. You are asked to confirm before deletion. Existing orders that used the code retain their `couponCode` record — only future use of the code is blocked.

@@ -1,0 +1,159 @@
+---
+title: 'Deploy Levi.dev Portfolio to Vercel or Node.js'
+description: 'Deploy to Vercel — set environment variables, run Prisma migrations, register the Stripe webhook, and understand the prebuild env-check and build pipeline.'
+---
+
+Vercel is the recommended deployment target because it is built by the same team as Next.js and handles server components, API routes, and incremental static regeneration without additional configuration. The app ships as a standard Next.js application, so other platforms (Railway, Render, Fly.io) also work as long as they support Node.js server deployments.
+
+This guide covers the full deployment path: cloning the repository, installing dependencies, setting environment variables, deploying, and registering the Stripe production webhook.
+
+## Before you start
+
+Make sure you have:
+
+- A [Vercel account](https://vercel.com/signup) connected to your GitHub account
+- A provisioned MySQL database with the `DATABASE_URL` ready (see [Database setup](/deployment/database))
+- All required environment variable values from the [environment variables guide](/deployment/environment-variables)
+- A Stripe account with live-mode keys if you want payments to work in production
+
+## Vercel deployment
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/ImLevii/portfolio-v0.git
+    cd portfolio-v0
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Running `npm install` also runs the `postinstall` hook, which executes `prisma generate` to produce the Prisma Client.
+
+    <CodeGroup>
+
+    ```bash npm
+    npm install
+    ```
+
+    ```bash yarn
+    yarn install
+    ```
+
+    ```bash pnpm
+    pnpm install
+    ```
+
+    </CodeGroup>
+  </Step>
+
+  <Step title="Import the project into Vercel">
+    Go to [vercel.com/new](https://vercel.com/new) and select **Import Git Repository**. Choose the `portfolio-v0` repository from your GitHub account.
+
+    Vercel detects the Next.js framework automatically and sets the following defaults, which are correct:
+
+    - **Framework preset**: Next.js
+    - **Build command**: `npm run build`
+    - **Output directory**: `.next`
+    - **Install command**: `npm install`
+
+    Do not change the build or install commands.
+  </Step>
+
+  <Step title="Add environment variables in Vercel">
+    Before the first deploy, add all required environment variables in the Vercel project settings under **Settings → Environment Variables**.
+
+    At minimum, the build will fail without these (enforced by `scripts/check-env.js` which runs as the `prebuild` hook):
+
+    | Variable | Environment |
+    |---|---|
+    | `DATABASE_URL` | Production, Preview |
+    | `AUTH_SECRET` | Production, Preview |
+    | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Production, Preview |
+    | `STRIPE_SECRET_KEY` | Production, Preview |
+    | `NEXT_PUBLIC_PAYPAL_CLIENT_ID` | Production, Preview |
+    | `NEXT_PUBLIC_PAYPAL_CLIENT_SECRET` | Production, Preview |
+    | `NEXT_PUBLIC_APP_URL` | Production, Preview |
+    | `STRIPE_WEBHOOK_SECRET` | Production |
+
+    Also add your OAuth credentials (`AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`) and any other variables your configuration requires.
+
+    <Note>
+    `NEXT_PUBLIC_APP_URL` should be set to your Vercel deployment URL (e.g. `https://your-project.vercel.app`) or your custom domain. This is used for PayPal redirect URLs and other absolute URL construction.
+    </Note>
+  </Step>
+
+  <Step title="Deploy">
+    Click **Deploy**. Vercel clones the repository, runs `npm install` (triggering `prisma generate`), then runs `npm run build`.
+
+    The `prebuild` hook (`node scripts/check-env.js`) validates that all required environment variables are present before `next build` starts. If any are missing the build fails with a clear list of the missing variable names.
+
+    A successful first deploy produces a URL like `https://your-project.vercel.app`.
+  </Step>
+
+  <Step title="Run database migrations">
+    After the first deploy, apply the Prisma migrations to your production database. Run this from your local machine with `DATABASE_URL` pointing at the production database:
+
+    ```bash
+    npx prisma migrate deploy
+    ```
+
+    This is a one-time step per database. Subsequent deploys do not require re-running migrations unless the schema changes.
+  </Step>
+
+  <Step title="Register the Stripe production webhook">
+    Stripe sends payment events (checkout completed, payment failed, etc.) to `/api/webhooks/stripe`. You must register this endpoint in the Stripe dashboard so Stripe knows where to send events.
+
+    In the [Stripe dashboard](https://dashboard.stripe.com/webhooks), click **Add endpoint** and use:
+
+    - **Endpoint URL**: `https://your-project.vercel.app/api/webhooks/stripe`
+    - **Events to listen to**: `checkout.session.completed` at minimum; add others as needed
+
+    After creating the endpoint, Stripe shows the **Signing secret** (`whsec_...`). Set this as `STRIPE_WEBHOOK_SECRET` in your Vercel environment variables.
+
+    <Warning>
+    Without `STRIPE_WEBHOOK_SECRET` set correctly, the webhook handler will reject all incoming Stripe events and orders will not be fulfilled after payment. Always register the webhook and set this variable before accepting live payments.
+    </Warning>
+  </Step>
+</Steps>
+
+## Build configuration notes
+
+### TypeScript errors are ignored
+
+`next.config.mjs` sets `typescript.ignoreBuildErrors: true`. This means TypeScript type errors do not fail the Vercel build. The app will still deploy even if there are type errors in the source. This is intentional in the current project configuration, but be aware that type safety is not enforced at build time.
+
+```javascript next.config.mjs
+const nextConfig = {
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  // ...
+}
+```
+
+### The prebuild check is the real gating mechanism
+
+Rather than relying on TypeScript compilation errors, the build is gated by `scripts/check-env.js`, which runs as the `prebuild` npm hook:
+
+```json package.json (scripts)
+{
+  "prebuild": "node scripts/check-env.js",
+  "build": "next build"
+}
+```
+
+If `check-env.js` exits with a non-zero code (missing required variables), `next build` never runs. This provides a deterministic failure message listing exactly which variables are absent.
+
+### Prisma Client generation
+
+The `postinstall` hook runs `prisma generate` automatically after every `npm install`. On Vercel, this means the Prisma Client is always regenerated from the current schema during the install phase of each deployment, with no manual intervention required.
+
+## Subsequent deployments
+
+Push to the `main` branch (or whichever branch Vercel tracks) to trigger a new deployment automatically. The full build pipeline runs on each push:
+
+1. `npm install` → `prisma generate`
+2. `node scripts/check-env.js` (prebuild)
+3. `next build`
+
+If you add new schema models, run `npx prisma migrate deploy` against the production database after the new code is deployed.

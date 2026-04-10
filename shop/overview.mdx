@@ -1,0 +1,70 @@
+---
+title: 'Shop & Payments: Digital Product Store Overview'
+description: 'How the Levi.dev integrated digital shop works — from product browsing and cart management to payment processing and automatic license key delivery.'
+---
+
+The Levi.dev portfolio includes a fully integrated digital product shop where visitors can browse, purchase, and immediately download digital goods such as scripts, UI kits, templates, and developer tools. Every part of the purchase lifecycle — from cart management to post-payment file delivery — is handled within the Next.js application itself, with no third-party storefront required.
+
+## How a purchase works
+
+<Steps>
+  <Step title="Browse the shop">
+    Customers visit `/shop` to see all listed products. Products are filtered by the `isListed` flag and ordered by creation date (newest first). Categories are displayed in a visual grid above the product grid, ordered by their `order` field.
+  </Step>
+  <Step title="View a product">
+    Clicking a product opens `/shop/[id]`, which shows the full product image, description, pricing, and the features list (stored as a JSON array in the `features` column). An "Add to Cart" button places the item in the client-side cart state.
+  </Step>
+  <Step title="Open the cart">
+    The cart popover in the navigation bar lists all selected items, shows a running total, and lets the customer enter a coupon code. The available payment methods are loaded from the database at this point so only enabled methods are shown.
+  </Step>
+  <Step title="Checkout">
+    The customer selects a payment method and clicks Checkout. A `POST /api/checkout` request is sent with the product IDs, selected payment method, and any applied coupon code. The server validates the products, applies the discount, and returns a redirect URL for the chosen payment provider.
+  </Step>
+  <Step title="Payment provider">
+    The customer completes payment on Stripe or PayPal. Both providers send a server-side webhook notification back to the application after a successful payment.
+  </Step>
+  <Step title="Order fulfillment">
+    The webhook handler creates an `Order` record, one `OrderItem` per purchased product, and one `LicenseKey` per product. If the product has a `duration` set, the license expiry is calculated at this point.
+  </Step>
+  <Step title="Download">
+    The customer navigates to `/shop/orders` to see their order history. For any product that has an associated file, a "Download Assets" button links to `GET /api/download/[licenseId]`, which validates the license and streams the file.
+  </Step>
+</Steps>
+
+## Core data models
+
+The shop is backed by seven Prisma models in a MySQL database.
+
+| Model | Purpose |
+|---|---|
+| `Product` | A digital item for sale — price, description, features, file path, license duration |
+| `Category` | Groupings shown in the category grid (e.g. Templates, UI Kits) |
+| `Order` | A completed purchase, linked to a user and a payment session |
+| `OrderItem` | One row per product within an order |
+| `LicenseKey` | The access credential generated per product per order |
+| `Coupon` | Discount codes supporting percentage or fixed-amount deductions |
+| `PaymentMethod` | Database-driven toggle for enabling Stripe, PayPal, or other methods |
+
+## Shop pages
+
+| Route | Description |
+|---|---|
+| `/shop` | Product listing with search, category filter, and sort |
+| `/shop/[id]` | Individual product detail page |
+| `/shop/orders` | Authenticated order history with download links |
+| `/shop/success` | Post-payment success confirmation |
+
+<CardGroup cols={2}>
+  <Card title="Products & Categories" icon="box" href="/shop/products-categories">
+    Product model fields, category structure, sale pricing, duration, and file delivery.
+  </Card>
+  <Card title="Payments" icon="credit-card" href="/shop/payments">
+    Stripe and PayPal flows, webhook fulfillment, and environment variable reference.
+  </Card>
+  <Card title="License Keys" icon="key" href="/shop/license-keys">
+    Key generation, status lifecycle, expiry calculation, and the download endpoint.
+  </Card>
+  <Card title="Coupons" icon="tag" href="/shop/coupons">
+    Discount code types, usage tracking, limits, and admin management.
+  </Card>
+</CardGroup>
